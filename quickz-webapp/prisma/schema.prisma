@@ -1,0 +1,110 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  accounts      Account[]
+  sessions      Session[]
+  licenses      License[]
+  payments      Payment[]
+  supportRequests SupportRequest[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model License {
+  id                String   @id @default(cuid())
+  userId            String
+  licenseKey        String   @unique
+  plan              String   @default("LIFETIME")
+  paymentStatus     String
+  paymentId         String?
+  paymentAmount     Float
+  maxDevices        Int      @default(2)
+  activatedDevices  Int      @default(0)
+  isActive          Boolean  @default(true)
+  activations       DeviceActivation[]
+  user              User     @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model DeviceActivation {
+  id           String   @id @default(cuid())
+  licenseId    String
+  deviceHash   String
+  deviceName   String?
+  browserInfo  String?
+  license      License  @relation(fields: [licenseId], references: [id])
+  activatedAt  DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  userId            String
+  razorpayOrderId   String   @unique
+  razorpayPaymentId String?  @unique
+  amount            Float
+  currency          String   @default("INR")
+  status            String
+  webhookVerified   Boolean  @default(false)
+  user              User     @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model SupportRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  message   String   @db.Text
+  status    String   @default("OPEN")
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
