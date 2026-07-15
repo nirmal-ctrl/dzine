@@ -3,6 +3,22 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -11,6 +27,7 @@ export default async function DashboardPage() {
     redirect("/auth/signin");
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userId = (session.user as any).id;
 
   const licenses = await prisma.license.findMany({
@@ -25,118 +42,135 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <header className="px-4 lg:px-6 h-14 flex items-center border-b bg-white">
-        <Link className="flex items-center justify-center" href="/">
-          <span className="font-bold text-2xl tracking-tighter text-black">Quickz</span>
-        </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Link className="text-sm font-medium hover:underline underline-offset-4 text-black" href="/pricing">
-            Pricing
-          </Link>
-          <span className="text-sm font-medium text-gray-500">
-            {session.user.email}
-          </span>
-        </nav>
-      </header>
-      <main className="flex-1 p-4 md:p-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8 text-black">User Dashboard</h1>
+    <SidebarProvider>
+      <AppSidebar 
+        user={{ 
+          name: session.user.name || "User", 
+          email: session.user.email || "", 
+          avatar: session.user.image || "" 
+        }} 
+      />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-card px-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/">Home</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Dashboard</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+          </div>
+        </header>
 
-          {/* License Section */}
-          <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 text-black">Your Licenses</h2>
-            {licenses.length === 0 ? (
-              <div className="bg-white p-8 rounded-lg border text-center">
-                <p className="text-gray-500 mb-4">You don't have any active licenses yet.</p>
-                <Link
-                  href="/pricing"
-                  className="inline-block py-2 px-6 bg-black text-white rounded-md font-medium"
-                >
-                  Buy Quickz Pro
-                </Link>
-              </div>
-            ) : (
-              <div className="grid gap-6 md:grid-cols-2">
-                {licenses.map((license) => (
-                  <div key={license.id} className="bg-white p-6 rounded-lg border shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">License Key</span>
-                        <p className="text-xl font-mono font-bold text-black break-all">{license.licenseKey}</p>
-                      </div>
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${license.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {license.isActive ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                      <div>
-                        <p className="text-gray-500">Plan</p>
-                        <p className="font-semibold text-black">{license.plan}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Activations</p>
-                        <p className="font-semibold text-black">{license.activatedDevices} / {license.maxDevices}</p>
-                      </div>
-                    </div>
-                    {license.activations.length > 0 && (
-                      <div className="mt-4 border-t pt-4">
-                        <p className="text-xs font-bold text-gray-400 uppercase mb-2">Activated Devices</p>
-                        <ul className="space-y-2">
-                          {license.activations.map((activation) => (
-                            <li key={activation.id} className="text-xs flex justify-between">
-                              <span className="text-gray-600">{activation.deviceName || 'Unknown Device'}</span>
-                              <span className="text-gray-400">{new Date(activation.activatedAt).toLocaleDateString()}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+        <main className="flex-1 p-4 md:p-8 bg-muted/20">
+          <div className="max-w-6xl mx-auto">
+            <h1 className="text-3xl font-bold mb-8 text-foreground">User Dashboard</h1>
 
-          {/* Payment History */}
-          <section>
-            <h2 className="text-xl font-bold mb-4 text-black">Payment History</h2>
-            <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Order ID</th>
-                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Amount</th>
-                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {payments.map((payment) => (
-                    <tr key={payment.id}>
-                      <td className="px-6 py-4 text-sm text-gray-600 font-mono">{payment.razorpayOrderId}</td>
-                      <td className="px-6 py-4 text-sm text-black font-semibold">₹{payment.amount}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${payment.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                          {payment.status}
+            {/* License Section */}
+            <section id="licenses" className="mb-12 scroll-mt-20">
+              <h2 className="text-xl font-bold mb-4 text-foreground">Your Licenses</h2>
+              {licenses.length === 0 ? (
+                <div className="bg-card p-8 rounded-lg border text-center">
+                  <p className="text-muted-foreground mb-4">{"You don't have any active licenses yet."}</p>
+                  <Link
+                    href="/pricing"
+                    className="inline-block py-2 px-6 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    Buy Quickz Pro
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid gap-6 md:grid-cols-2">
+                  {licenses.map((license) => (
+                    <div key={license.id} className="bg-card p-6 rounded-lg border shadow-sm">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">License Key</span>
+                          <p className="text-xl font-mono font-bold text-foreground break-all">{license.licenseKey}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${license.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+                          {license.isActive ? 'ACTIVE' : 'INACTIVE'}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(payment.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                        <div>
+                          <p className="text-muted-foreground">Plan</p>
+                          <p className="font-semibold text-foreground">{license.plan}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Activations</p>
+                          <p className="font-semibold text-foreground">{license.activatedDevices} / {license.maxDevices}</p>
+                        </div>
+                      </div>
+                      {license.activations.length > 0 && (
+                        <div className="mt-4 border-t pt-4">
+                          <p className="text-xs font-bold text-muted-foreground uppercase mb-2">Activated Devices</p>
+                          <ul className="space-y-2">
+                            {license.activations.map((activation) => (
+                              <li key={activation.id} className="text-xs flex justify-between">
+                                <span className="text-foreground">{activation.deviceName || 'Unknown Device'}</span>
+                                <span className="text-muted-foreground">{new Date(activation.activatedAt).toLocaleDateString()}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   ))}
-                  {payments.length === 0 && (
+                </div>
+              )}
+            </section>
+
+            {/* Payment History */}
+            <section id="payments" className="scroll-mt-20">
+              <h2 className="text-xl font-bold mb-4 text-foreground">Payment History</h2>
+              <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-muted/50 border-b">
                     <tr>
-                      <td colSpan={4} className="px-6 py-8 text-center text-gray-500">No payments found.</td>
+                      <th className="px-6 py-3 text-xs font-bold text-muted-foreground uppercase">Order ID</th>
+                      <th className="px-6 py-3 text-xs font-bold text-muted-foreground uppercase">Amount</th>
+                      <th className="px-6 py-3 text-xs font-bold text-muted-foreground uppercase">Status</th>
+                      <th className="px-6 py-3 text-xs font-bold text-muted-foreground uppercase">Date</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      </main>
-    </div>
+                  </thead>
+                  <tbody className="divide-y">
+                    {payments.map((payment) => (
+                      <tr key={payment.id}>
+                        <td className="px-6 py-4 text-sm text-muted-foreground font-mono">{payment.razorpayOrderId}</td>
+                        <td className="px-6 py-4 text-sm text-foreground font-semibold">₹{payment.amount}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${payment.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
+                            {payment.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">
+                          {new Date(payment.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                    {payments.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">No payments found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
