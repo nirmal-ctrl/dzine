@@ -8,6 +8,7 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   addEdge,
+  updateEdge,
   Connection,
   Edge,
   MarkerType,
@@ -198,6 +199,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [showLogs, setShowLogs] = React.useState(false)
 
   const [selectedNode, setSelectedNode] = React.useState<Node<NodeData> | null>(null)
+  const [selectedEdge, setSelectedEdge] = React.useState<Edge | null>(null)
   const [isSheetOpen, setIsSheetOpen] = React.useState(false)
 
   // AI Assistant Chat panel states
@@ -210,7 +212,14 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [isChatStreaming, setIsChatStreaming] = React.useState(false)
 
   const onNodeClick = React.useCallback((event: React.MouseEvent, node: Node) => {
+    setSelectedEdge(null)
     setSelectedNode(node as Node<NodeData>)
+    setIsSheetOpen(true)
+  }, [])
+
+  const onEdgeClick = React.useCallback((event: React.MouseEvent, edge: Edge) => {
+    setSelectedNode(null)
+    setSelectedEdge(edge)
     setIsSheetOpen(true)
   }, [])
 
@@ -327,8 +336,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                             id: parsedEdge.id,
                             source: parsedEdge.source,
                             target: parsedEdge.target,
-                            markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-                            style: { strokeWidth: 2, stroke: "var(--border)" }
+                            markerEnd: { type: MarkerType.ArrowClosed },
+                            style: { strokeWidth: 2 },
+                            interactionWidth: 20
                           }
                         } catch {
                           return null
@@ -384,13 +394,18 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     }))
   }
 
-  const deleteSelectedNode = () => {
-    if (!selectedNode) return
-    setNodes(prev => prev.filter(n => n.id !== selectedNode.id))
-    setEdges(prev => prev.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id))
+  const deleteSelectedElement = () => {
+    if (selectedNode) {
+      setNodes(prev => prev.filter(n => n.id !== selectedNode.id))
+      setEdges(prev => prev.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id))
+      setLogs(prev => [...prev, `[System] Deleted node: ${selectedNode.data.label}`])
+    } else if (selectedEdge) {
+      setEdges(prev => prev.filter(e => e.id !== selectedEdge.id))
+      setLogs(prev => [...prev, `[System] Deleted connection: ${selectedEdge.id}`])
+    }
     setIsSheetOpen(false)
     setSelectedNode(null)
-    setLogs(prev => [...prev, `[System] Deleted node: ${selectedNode.data.label}`])
+    setSelectedEdge(null)
   }
 
   // Load default nodes on mount
@@ -429,8 +444,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         id: "edge-1",
         source: "node-1",
         target: "node-2",
-        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-        style: { strokeWidth: 2, stroke: "var(--border)" }
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { strokeWidth: 2 },
+        interactionWidth: 20
       }
     ]
 
@@ -441,9 +457,15 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const onConnect = React.useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge({ 
       ...params, 
-      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-      style: { strokeWidth: 2, stroke: "var(--border)" }
+      markerEnd: { type: MarkerType.ArrowClosed },
+      style: { strokeWidth: 2 },
+      interactionWidth: 20
     }, eds)),
+    [setEdges]
+  )
+
+  const onEdgeUpdate = React.useCallback(
+    (oldEdge: Edge, newConnection: Connection) => setEdges((els) => updateEdge(oldEdge, newConnection, els)),
     [setEdges]
   )
 
@@ -584,8 +606,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           id: `edge-${lastNode.id}-${newId}`,
           source: lastNode.id,
           target: newId,
-          markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-          style: { strokeWidth: 2, stroke: "var(--border)" }
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { strokeWidth: 2 },
+          interactionWidth: 20
         }
         setEdges(prev => [...prev, newEdge])
       }
@@ -624,8 +647,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           id: `edge-${sourceId}-${targetId}`,
           source: sourceId,
           target: targetId,
-          markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-          style: { strokeWidth: 2, stroke: "var(--border)" }
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { strokeWidth: 2 },
+          interactionWidth: 20
         }
         setEdges(prev => {
           if (prev.some(e => e.source === sourceId && e.target === targetId)) return prev
@@ -681,6 +705,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       setNodes([])
       setEdges([])
       setSelectedNode(null)
+      setSelectedEdge(null)
       setIsSheetOpen(false)
       setLogs(prev => [...prev, `[AI Omni-Box] Real-time: Cleared canvas.`])
     } else {
@@ -821,6 +846,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   setEdges([])
                   setLogs([])
                   setSelectedNode(null)
+                  setSelectedEdge(null)
                   setIsSheetOpen(false)
                 }}
                 className="w-full text-xs rounded-none h-9"
@@ -871,7 +897,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onEdgeUpdate={onEdgeUpdate}
               onNodeClick={onNodeClick}
+              onEdgeClick={onEdgeClick}
               nodeTypes={nodeTypes}
               fitView
             >
@@ -927,31 +955,32 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           </div>
 
           {/* Canvas Embedded Right Sidebar (Push configuration panel) */}
-          {isSheetOpen && selectedNode && (
+          {isSheetOpen && (selectedNode || selectedEdge) && (
             <div className="w-[400px] border-l bg-card flex flex-col h-full min-h-0 max-h-full overflow-hidden z-10 shrink-0">
               <div className="p-6 border-b shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="text-xs uppercase font-mono tracking-wider px-2 py-0.5 bg-primary/10 text-primary font-bold">
-                    {selectedNode.data.type}
+                    {selectedNode ? selectedNode.data.type : "Connection"}
                   </span>
-                  <span className="text-[10px] text-muted-foreground font-mono">ID: {selectedNode.id}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">ID: {selectedNode ? selectedNode.id : selectedEdge?.id}</span>
                 </div>
-                <h3 className="text-lg font-bold mt-1 text-foreground">Configure Node</h3>
+                <h3 className="text-lg font-bold mt-1 text-foreground">Configure {selectedNode ? "Node" : "Edge"}</h3>
                 <p className="text-xs text-muted-foreground">
-                  Modify the selected block configurations and behaviors.
+                  Modify the selected {selectedNode ? "block" : "connection"} configurations.
                 </p>
               </div>
 
-              <div className="relative flex-1 min-h-0 overflow-hidden">
-                <div className="absolute inset-0 overflow-y-auto p-6 space-y-5">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Block Title</Label>
-                  <Input 
-                    value={selectedNode.data.label}
-                    onChange={(e) => updateNodeData({ label: e.target.value })}
-                    className="rounded-none text-xs h-9 font-semibold"
-                  />
-                </div>
+              {selectedNode && (
+                <div className="relative flex-1 min-h-0 overflow-hidden">
+                  <div className="absolute inset-0 overflow-y-auto p-6 space-y-5">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Block Title</Label>
+                    <Input 
+                      value={selectedNode.data.label}
+                      onChange={(e) => updateNodeData({ label: e.target.value })}
+                      className="rounded-none text-xs h-9 font-semibold"
+                    />
+                  </div>
 
                 {/* Trigger Fields */}
                 {selectedNode.data.type === "trigger" && (
@@ -1224,18 +1253,45 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     />
                   </div>
                 )}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {selectedEdge && (
+                <div className="relative flex-1 min-h-0 overflow-hidden">
+                  <div className="absolute inset-0 overflow-y-auto p-6 space-y-5">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Source Node ID</Label>
+                      <Input 
+                        disabled
+                        value={selectedEdge.source}
+                        className="rounded-none text-xs h-9 bg-muted font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target Node ID</Label>
+                      <Input 
+                        disabled
+                        value={selectedEdge.target}
+                        className="rounded-none text-xs h-9 bg-muted font-mono"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-4">
+                      You can delete this connection by clicking the delete button below, or by pressing Backspace/Delete on your keyboard.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="p-6 border-t shrink-0 flex flex-row items-center gap-3 bg-muted/5">
                 <Button 
                   type="button" 
                   variant="destructive" 
-                  onClick={deleteSelectedNode}
+                  onClick={deleteSelectedElement}
                   className="flex-1 rounded-none text-xs h-10 gap-1.5"
                 >
                   <Trash2Icon className="size-4" />
-                  Delete Node
+                  Delete {selectedNode ? "Node" : "Edge"}
                 </Button>
                 <Button 
                   type="button" 
@@ -1367,8 +1423,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
                                 const loadedEdges = parsed.edges.map((e: { id: string; source: string; target: string }) => ({
                                   ...e,
-                                  markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-                                  style: { strokeWidth: 2, stroke: "var(--border)" }
+                                  markerEnd: { type: MarkerType.ArrowClosed },
+                                  style: { strokeWidth: 2 },
+                                  interactionWidth: 20
                                 }))
 
                                 setNodes(loadedNodes)
