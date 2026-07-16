@@ -19,7 +19,8 @@ import {
   LayoutDashboardIcon, 
   ArrowLeftRightIcon, 
   WorkflowIcon, 
-  BoxesIcon 
+  BoxesIcon,
+  Settings2Icon
 } from "lucide-react"
 
 // This is sample data customized for Quickz.
@@ -93,6 +94,13 @@ const data = {
       url: "/dashboard/blocks",
       icon: (
         <BoxesIcon className="size-4" />
+      ),
+    },
+    {
+      name: "AI Settings",
+      url: "/dashboard/settings",
+      icon: (
+        <Settings2Icon className="size-4" />
       ),
     },
     {

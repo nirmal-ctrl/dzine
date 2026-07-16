@@ -18,6 +18,7 @@ import ReactFlow, {
 } from "reactflow"
 import "reactflow/dist/style.css"
 
+import { useAiSettings } from "@/hooks/use-ai-settings"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import {
@@ -203,10 +204,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [isSheetOpen, setIsSheetOpen] = React.useState(false)
 
   // AI Assistant Chat panel states
+  const { settings } = useAiSettings()
+
   const [isChatOpen, setIsChatOpen] = React.useState(false)
-  const [activeProvider, setActiveProvider] = React.useState<"openai" | "claude" | "gemini" | "open-source" | "light-llm">("openai")
   const [chatMessages, setChatMessages] = React.useState<{ role: "user" | "assistant"; text: string }[]>([
-    { role: "assistant", text: "Hello! Switched to OpenAI GPT-4o. Select your AI Routing Provider above. Tell me what you'd like to build, e.g., 'Build an AI image sequence' or ask me custom questions!" }
+    { role: "assistant", text: "Hello! Tell me what you'd like to build, e.g., 'Build an AI image sequence' or ask me custom questions!" }
   ])
   const [chatInput, setChatInput] = React.useState("")
   const [isChatStreaming, setIsChatStreaming] = React.useState(false)
@@ -223,13 +225,10 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     setIsSheetOpen(true)
   }, [])
 
-  const handleChatSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!chatInput.trim() || isChatStreaming) return
+  const submitChatQuery = async (queryText: string) => {
+    if (!queryText.trim() || isChatStreaming) return
 
-    const userText = chatInput
-    setChatMessages(prev => [...prev, { role: "user", text: userText }])
-    setChatInput("")
+    setChatMessages(prev => [...prev, { role: "user", text: queryText }])
     setIsChatStreaming(true)
 
     try {
@@ -237,11 +236,17 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: userText,
-          provider: activeProvider,
+          prompt: queryText,
+          provider: settings.activeProvider,
+          modelId: settings.models[settings.activeProvider],
           activeNodes: nodes.map(n => ({ id: n.id, type: n.data.type }))
         })
       })
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`API Error ${response.status}: ${errText}`);
+      }
 
       if (!response.body) throw new Error("No response stream available")
       
@@ -264,7 +269,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               try {
                 const parsed = JSON.parse(line.slice(6))
                 if (parsed.text) {
-                  accumulatedText = parsed.text
+                  accumulatedText += parsed.text
                   
                   setChatMessages(prev => {
                     const updated = [...prev]
@@ -370,6 +375,14 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         text: `Error calling AI Route: ${errMsg}. Please make sure the service is up and running.` 
       }])
     }
+  }
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!chatInput.trim() || isChatStreaming) return
+    const text = chatInput
+    setChatInput("")
+    await submitChatQuery(text)
   }
 
   const updateNodeData = (updatedFields: Partial<NodeData>) => {
@@ -511,209 +524,25 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   // Interpret natural language inside the AI Omni Box in real time
   const handleAiCommand = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!omniInput.trim()) return
+    if (!omniInput.trim() || isChatStreaming) return
 
-    setAiGenerating(true)
-    setLogs(prev => [...prev, `[AI Omni-Box] Reading prompt: "${omniInput}"...`])
+    const text = omniInput
+    setOmniInput("")
 
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    const text = omniInput.toLowerCase()
-    
-    // 1. ADD Node Command
-    if (text.includes("add") || text.includes("create") || text.includes("insert") || text.includes("generate")) {
-      let nodeType: NodeType = "text-gen"
-      let label = "Text Gen (AI)"
-      let defaultParams: Record<string, string> = { prompt: "Translate inputs", model: "gpt-4o" }
-      let icon = <BrainCircuitIcon className="size-4 text-violet-500" />
-      let color = "violet"
-
-      if (text.includes("image") || text.includes("picture") || text.includes("draw")) {
-        nodeType = "image-gen"
-        label = "Image Gen (AI)"
-        const promptMatch = omniInput.match(/(?:prompt|with|of)\s+([^,.]+)/i)
-        defaultParams = { 
-          prompt: promptMatch ? promptMatch[1].trim() : "A creative office workspace", 
-          model: "imagen-4.0", 
-          aspectRatio: "1:1",
-          numberOfImages: "1",
-          imageSize: "1K",
-          personGeneration: "dont_allow"
-        }
-        icon = <ImageIcon className="size-4 text-pink-500" />
-        color = "pink"
-      } else if (text.includes("webhook") || text.includes("trigger") || text.includes("start")) {
-        nodeType = "trigger"
-        label = "Trigger (Event)"
-        const urlMatch = omniInput.match(/https?:\/\/[^\s]+/i)
-        defaultParams = { 
-          webhookUrl: urlMatch ? urlMatch[0] : "https://api.quickz.ai/v1/webhook", 
-          event: "On Event Triggered" 
-        }
-        icon = <ZapIcon className="size-4 text-emerald-500" />
-        color = "emerald"
-      } else if (text.includes("http") || text.includes("request") || text.includes("fetch") || text.includes("api")) {
-        nodeType = "http-request"
-        label = "HTTP Request"
-        const urlMatch = omniInput.match(/https?:\/\/[^\s]+/i)
-        const methodMatch = text.match(/(get|post|put|delete)/i)
-        defaultParams = { 
-          url: urlMatch ? urlMatch[0] : "https://api.github.com", 
-          method: methodMatch ? methodMatch[0].toUpperCase() : "GET",
-          body: "{}"
-        }
-        icon = <GlobeIcon className="size-4 text-blue-500" />
-        color = "blue"
-      } else if (text.includes("script") || text.includes("code") || text.includes("js") || text.includes("javascript")) {
-        nodeType = "script"
-        label = "Custom JS"
-        defaultParams = { code: "return items.map(i => ({ ...i, processed: true }));" }
-        icon = <Code2Icon className="size-4 text-rose-500" />
-        color = "rose"
-      } else if (text.includes("parse") || text.includes("json") || text.includes("path")) {
-        nodeType = "json-parse"
-        label = "JSON Parse"
-        defaultParams = { expression: "$.data" }
-        icon = <BracesIcon className="size-4 text-amber-500" />
-        color = "amber"
-      }
-
-      // Calculate layout position (right of the last node)
-      const lastNode = nodes[nodes.length - 1]
-      const xPos = lastNode ? lastNode.position.x + 300 : 100
-      const yPos = lastNode ? lastNode.position.y : 150
-      const newId = `node-${nodes.length + 1}`
-
-      const newNode: Node<NodeData> = {
-        id: newId,
-        type: "custom",
-        position: { x: xPos, y: yPos },
-        data: {
-          label,
-          type: nodeType,
-          icon,
-          color,
-          status: "idle",
-          params: defaultParams
-        }
-      }
-
-      setNodes(prev => [...prev, newNode])
-
-      // Auto-connect to last active node
-      if (lastNode) {
-        const newEdge: Edge = {
-          id: `edge-${lastNode.id}-${newId}`,
-          source: lastNode.id,
-          target: newId,
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { strokeWidth: 2 },
-          interactionWidth: 20
-        }
-        setEdges(prev => [...prev, newEdge])
-      }
-
-      setLogs(prev => [...prev, `[AI Omni-Box] Real-time: Added and connected node "${label}" (ID: ${newId})!`])
-    }
-    // 2. CONNECT Nodes Command
-    else if (text.includes("connect") || text.includes("link")) {
-      const matches = text.match(/node-\d+/g)
-      let sourceId = ""
-      let targetId = ""
-
-      if (matches && matches.length >= 2) {
-        sourceId = matches[0]
-        targetId = matches[1]
-      } else {
-        const triggerNode = nodes.find(n => n.data.type === "trigger")
-        const textNode = nodes.find(n => n.data.type === "text-gen")
-        const imageNode = nodes.find(n => n.data.type === "image-gen")
-        const httpNode = nodes.find(n => n.data.type === "http-request")
-
-        if (text.includes("trigger") && (text.includes("text") || text.includes("gpt") || text.includes("claude"))) {
-          sourceId = triggerNode?.id || ""
-          targetId = textNode?.id || ""
-        } else if (text.includes("trigger") && (text.includes("image") || text.includes("draw"))) {
-          sourceId = triggerNode?.id || ""
-          targetId = imageNode?.id || ""
-        } else if ((text.includes("text") || text.includes("ai")) && text.includes("http")) {
-          sourceId = textNode?.id || ""
-          targetId = httpNode?.id || ""
-        }
-      }
-
-      if (sourceId && targetId) {
-        const newEdge: Edge = {
-          id: `edge-${sourceId}-${targetId}`,
-          source: sourceId,
-          target: targetId,
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { strokeWidth: 2 },
-          interactionWidth: 20
-        }
-        setEdges(prev => {
-          if (prev.some(e => e.source === sourceId && e.target === targetId)) return prev
-          return [...prev, newEdge]
-        })
-        setLogs(prev => [...prev, `[AI Omni-Box] Real-time: Connected ${sourceId} ➜ ${targetId}!`])
-      } else {
-        setLogs(prev => [...prev, `[AI Omni-Box] Could not identify nodes to link. Try: "connect node-1 to node-2"`])
-      }
-    }
-    // 3. EDIT parameters command
-    else if (text.includes("set") || text.includes("update") || text.includes("change")) {
-      const idMatch = text.match(/node-\d+/)
-      const targetNodeId = idMatch ? idMatch[0] : nodes[nodes.length - 1]?.id
-
-      if (targetNodeId) {
-        const valMatch = omniInput.match(/(?:to|value)\s+['"]?([^'"]+)['"]?/i)
-        if (valMatch) {
-          const newValue = valMatch[1].trim()
-          let paramKey = "prompt"
-          if (text.includes("webhook") || text.includes("url")) {
-            paramKey = "webhookUrl"
-          } else if (text.includes("code")) {
-            paramKey = "code"
-          } else if (text.includes("expression") || text.includes("path")) {
-            paramKey = "expression"
-          }
-
-          setNodes(prev => prev.map(n => {
-            if (n.id === targetNodeId) {
-              return {
-                ...n,
-                data: {
-                  ...n.data,
-                  params: {
-                    ...n.data.params,
-                    [paramKey]: newValue,
-                    url: paramKey === "webhookUrl" ? newValue : n.data.params.url
-                  }
-                }
-              }
-            }
-            return n
-          }))
-          setLogs(prev => [...prev, `[AI Omni-Box] Real-time: Updated ${targetNodeId}'s parameter [${paramKey}] to "${newValue}"!`])
-        }
-      } else {
-        setLogs(prev => [...prev, `[AI Omni-Box] Target node not found.`])
-      }
-    }
-    // 4. CLEAR / RESET Commands
-    else if (text.includes("clear") || text.includes("reset")) {
+    // Check for local instant commands first
+    const lowercaseText = text.toLowerCase()
+    if (lowercaseText.includes("clear") || lowercaseText.includes("reset")) {
       setNodes([])
       setEdges([])
       setSelectedNode(null)
       setSelectedEdge(null)
       setIsSheetOpen(false)
       setLogs(prev => [...prev, `[AI Omni-Box] Real-time: Cleared canvas.`])
-    } else {
-      setLogs(prev => [...prev, `[AI Omni-Box] Prompt unrecognized. Try: "add image gen node", "connect node-1 to node-2", or "clear canvas"`])
+      return
     }
 
-    setOmniInput("")
-    setAiGenerating(false)
+    // Trigger full chat inference via AI router
+    await submitChatQuery(text)
   }
 
   // Simulate workflow execution step-by-step
@@ -919,38 +748,99 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
             {/* Premium Bottom Center AI Omni Box (Centered in Canvas) */}
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 w-full max-w-xl px-4">
-              <form onSubmit={handleAiCommand} className="flex gap-2 p-1.5 bg-card/95 border border-primary/20 shadow-xl backdrop-blur-md rounded-none items-center">
-                <div className="flex-1 flex items-center gap-2.5 px-3">
-                  <SparkleIcon className="size-4.5 text-primary animate-pulse shrink-0" />
-                  <Input
-                    value={omniInput}
-                    onChange={(e) => setOmniInput(e.target.value)}
-                    placeholder="Command AI (e.g. Load example.com, wait 2s, and extract data)"
-                    disabled={aiGenerating || isRunning}
-                    className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-xs px-0 h-9 font-medium text-foreground bg-transparent w-full placeholder:text-muted-foreground/60"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Button 
-                    type="submit" 
-                    disabled={aiGenerating || isRunning || !omniInput.trim()}
-                    className="h-9 px-4 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-none gap-1"
-                  >
-                    {aiGenerating ? "Generating..." : "Generate Flow"}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline"
-                    onClick={() => {
-                      setIsChatOpen(true)
-                    }}
-                    title="Maximize AI Chat"
-                    className="h-9 w-9 p-0 rounded-none flex items-center justify-center hover:border-primary/50 text-muted-foreground hover:text-foreground"
-                  >
-                    <Maximize2Icon className="size-4" />
-                  </Button>
-                </div>
-              </form>
+              <div className="bg-card/95 border border-primary/20 shadow-xl backdrop-blur-md rounded-none overflow-hidden flex flex-col transition-all">
+                
+                {/* Expandable chat thread within the omni box itself when sidebar chat is closed */}
+                {!isChatOpen && chatMessages.length > 1 && (
+                  <div className="max-h-[300px] overflow-y-auto p-4 border-b border-border space-y-3 flex flex-col min-h-[100px] scrollbar-thin">
+                    {chatMessages.map((msg, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`flex items-start gap-2.5 max-w-[85%] ${
+                          msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
+                        }`}
+                      >
+                        {/* Author Icons */}
+                        <div className="shrink-0">
+                          {msg.role === 'user' ? (
+                            session?.user?.image ? (
+                              <img src={session.user.image} alt="User" className="size-6 rounded-full" />
+                            ) : (
+                              <div className="size-6 bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center rounded-full">
+                                U
+                              </div>
+                            )
+                          ) : (
+                            <div className="size-6 bg-violet-500/10 text-violet-500 flex items-center justify-center border border-violet-500/20 rounded-full">
+                              <SparkleIcon className="size-3.5 animate-pulse" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Text Thread Content */}
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider font-mono">
+                            {msg.role === 'user' ? 'You' : 'AI'}
+                          </span>
+                          <div className={`p-2.5 text-xs leading-relaxed rounded-none select-text ${
+                            msg.role === 'user' 
+                              ? 'bg-primary text-primary-foreground font-semibold' 
+                              : 'bg-muted border border-border text-foreground font-medium whitespace-pre-wrap'
+                          }`}>
+                            {msg.text || (
+                              <span className="inline-flex gap-1.5 items-center font-bold text-primary/70 animate-pulse">
+                                <SparkleIcon className="size-3 animate-spin text-primary" />
+                                Analyzing flow...
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {isChatStreaming && (
+                      <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] pl-8">
+                        <span className="size-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="size-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="size-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <span className="ml-1 font-medium italic">Streaming response...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={handleAiCommand} className="flex gap-2 p-1.5 items-center">
+                  <div className="flex-1 flex items-center gap-2.5 px-3">
+                    <SparkleIcon className={`size-4.5 text-primary shrink-0 ${isChatStreaming ? 'animate-spin' : 'animate-pulse'}`} />
+                    <Input
+                      value={omniInput}
+                      onChange={(e) => setOmniInput(e.target.value)}
+                      placeholder="Type a message or build request..."
+                      disabled={isChatStreaming || isRunning}
+                      className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-xs px-0 h-9 font-medium text-foreground bg-transparent w-full placeholder:text-muted-foreground/60"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button 
+                      type="submit" 
+                      disabled={isChatStreaming || isRunning || !omniInput.trim()}
+                      className="h-9 px-4 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-none gap-1"
+                    >
+                      {isChatStreaming ? "Streaming..." : "Send"}
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      onClick={() => {
+                        setIsChatOpen(true)
+                      }}
+                      title="Maximize AI Chat"
+                      className="h-9 w-9 p-0 rounded-none flex items-center justify-center hover:border-primary/50 text-muted-foreground hover:text-foreground"
+                    >
+                      <Maximize2Icon className="size-4" />
+                    </Button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
 
@@ -1074,18 +964,6 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 {selectedNode.data.type === "text-gen" && (
                   <>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Model Choice</Label>
-                      <select 
-                        value={selectedNode.data.params.model || "gpt-4o"}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, model: e.target.value } })}
-                        className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                      >
-                        <option value="gpt-4o">GPT-4o (OpenAI)</option>
-                        <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Anthropic)</option>
-                        <option value="llama-3">Llama 3 (Meta)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">AI Prompt Instructions</Label>
                       <Textarea 
                         value={selectedNode.data.params.prompt || ""}
@@ -1113,18 +991,6 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 {/* Image Gen (AI) Fields */}
                 {selectedNode.data.type === "image-gen" && (
                   <>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">AI Model</Label>
-                      <select 
-                        value={selectedNode.data.params.model || "imagen-4.0"}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, model: e.target.value } })}
-                        className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-                      >
-                        <option value="imagen-4.0">Imagen 4.0 - Photorealistic</option>
-                        <option value="gemini-3-pro-image">Gemini 3 Pro - Creative & Artistic</option>
-                        <option value="nano-banana-2">Nano Banana 2 - Fast & Quirky</option>
-                      </select>
-                    </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Image Generation Prompt</Label>
                       <Textarea 
@@ -1322,36 +1188,6 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   >
                     <Maximize2Icon className="size-3.5 rotate-45" />
                   </Button>
-                </div>
-                
-                {/* Router Selector */}
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Select AI Routing Provider</Label>
-                  <select 
-                    value={activeProvider}
-                    onChange={(e) => {
-                      const val = e.target.value as "openai" | "claude" | "gemini" | "open-source" | "light-llm"
-                      setActiveProvider(val)
-                      let providerName = ""
-                      if (val === "openai") providerName = "OpenAI GPT-4o"
-                      else if (val === "claude") providerName = "Anthropic Claude 3.5 Sonnet"
-                      else if (val === "gemini") providerName = "Google Gemini 1.5 Pro"
-                      else if (val === "open-source") providerName = "Meta Llama 3.1"
-                      else if (val === "light-llm") providerName = "Banana Nano Flash"
-                      
-                      setChatMessages(prev => [...prev, { 
-                        role: "assistant", 
-                        text: `Routed session switched to **${providerName}**. How can I help you construct workflows?` 
-                      }])
-                    }}
-                    className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-                  >
-                    <option value="openai">OpenAI (GPT-4o) - Default</option>
-                    <option value="claude">Anthropic (Claude 3.5 Sonnet)</option>
-                    <option value="gemini">Google (Gemini 1.5 Pro)</option>
-                    <option value="open-source">Meta (Llama 3.1) - Open Source</option>
-                    <option value="light-llm">Haiku / Flash - Light LLM</option>
-                  </select>
                 </div>
               </div>
 
