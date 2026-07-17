@@ -18,10 +18,10 @@ export interface AiSettings {
 const DEFAULT_SETTINGS: AiSettings = {
   activeProvider: "gemini",
   models: {
-    openai: "gpt-5.4-pro",
-    claude: "claude-sonnet-5",
-    gemini: "gemini-3.5-flash",
-    "open-source": "meta-llama/llama-4-scout-17b-16e-instruct",
+    openai: "gpt-4o-mini",
+    claude: "claude-3-5-sonnet-20241022",
+    gemini: "gemini-2.5-flash",
+    "open-source": "llama-3.3-70b-versatile",
     "light-llm": "gemma-3-12b-it"
   }
 }

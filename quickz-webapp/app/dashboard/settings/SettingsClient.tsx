@@ -125,14 +125,11 @@ export function SettingsClient({ session }: SettingsClientProps) {
                       <SelectValue placeholder="Select OpenAI model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gpt-5.6-luna">GPT-5.6 Luna</SelectItem>
-                      <SelectItem value="gpt-5.4-pro">GPT-5.4 Pro</SelectItem>
-                      <SelectItem value="gpt-5">GPT-5</SelectItem>
-                      <SelectItem value="gpt-4.1">GPT-4.1</SelectItem>
-                      <SelectItem value="o4-mini">o4 Mini</SelectItem>
-                      <SelectItem value="o3">o3</SelectItem>
-                      <SelectItem value="o1">o1</SelectItem>
+                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
                       <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                      <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                      <SelectItem value="o3-mini">o3 Mini</SelectItem>
+                      <SelectItem value="o1-mini">o1 Mini</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -149,12 +146,9 @@ export function SettingsClient({ session }: SettingsClientProps) {
                       <SelectValue placeholder="Select Claude model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="claude-sonnet-5">Claude 5 Sonnet</SelectItem>
-                      <SelectItem value="claude-fable-5">Claude 5 Fable</SelectItem>
-                      <SelectItem value="claude-opus-4-0">Claude 4 Opus</SelectItem>
-                      <SelectItem value="claude-sonnet-4-5">Claude 4.5 Sonnet</SelectItem>
-                      <SelectItem value="claude-haiku-4-5">Claude 4.5 Haiku</SelectItem>
                       <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
+                      <SelectItem value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</SelectItem>
+                      <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -171,11 +165,10 @@ export function SettingsClient({ session }: SettingsClientProps) {
                       <SelectValue placeholder="Select Gemini model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gemini-3.5-flash">Gemini 3.5 Flash</SelectItem>
-                      <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Preview)</SelectItem>
-                      <SelectItem value="gemini-3-pro-preview">Gemini 3.0 Pro (Preview)</SelectItem>
-                      <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
                       <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                      <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                      <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
+                      <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
                       <SelectItem value="gemini-1.5-pro-latest">Gemini 1.5 Pro</SelectItem>
                     </SelectContent>
                   </Select>
@@ -193,12 +186,9 @@ export function SettingsClient({ session }: SettingsClientProps) {
                       <SelectValue placeholder="Select Open Source model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout (17B)</SelectItem>
-                      <SelectItem value="deepseek-r1-distill-llama-70b">DeepSeek R1 (Distill Llama 70B)</SelectItem>
-                      <SelectItem value="qwen/qwen3-32b">Qwen 3 (32B)</SelectItem>
-                      <SelectItem value="openai/gpt-oss-120b">GPT OSS (120B)</SelectItem>
                       <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 (70B) Versatile</SelectItem>
                       <SelectItem value="llama-3.1-8b-instant">Llama 3.1 (8B) Instant</SelectItem>
+                      <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
