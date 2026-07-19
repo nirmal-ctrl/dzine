@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
 | type | purpose | config keys |
 | :--- | :--- | :--- |
-| trigger | Entry point (event or webhook) | webhookUrl, event, contentType (application/json, multipart/form-data, text/plain, image/png, application/xml), inputSchema (JSON Schema, optional) |
+| trigger | Entry point (event or webhook) | webhookUrl, event, contentType (application/json, multipart/form-data, text/plain, image/png, application/xml), inputSchema (stringified JSON schema, e.g. '{"type":"object","properties":{"field1":{"type":"string"}}}') |
 | llm | LLM generation block | provider (openai/anthropic/google/groq), model, apiKey, prompt ({{placeholder}} ok), temperature, responseFormat (text/json_object), jsonSchema |
 | image-gen | AI image generation | prompt ({{placeholder}} ok), aspectRatio, style, numberOfImages, imageSize, referenceImage (optional base64 style reference) |
 | http-request | HTTP request | url, method (GET/POST), body (JSON string w/ {{placeholder}}) |
@@ -81,6 +81,9 @@ Trigger (node-1) → Router (node-2) → LLM (node-3) → Output (node-4)
 
 - node-2 condition: "{{node-1.isPriority}} === true"
 - node-3 prompt: "Process high priority task: {{node-1.task}}"
+
+## Trigger Inputs
+If the user specifies incoming payload fields or variables for the trigger node, you MUST provide a valid stringified JSON schema in the trigger node's \`inputSchema\` param (e.g. \`"{\\"type\\":\\"object\\",\\"properties\\":{\\"n_jokes\\":{\\"type\\":\\"number\\"}}}"\`).
 
 ## Edge rules
 
