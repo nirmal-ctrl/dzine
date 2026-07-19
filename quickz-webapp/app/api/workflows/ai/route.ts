@@ -25,51 +25,68 @@ export async function POST(req: Request) {
 | image-gen | AI image generation | prompt ({{placeholder}} ok), aspectRatio, style, numberOfImages, imageSize, referenceImage (optional base64 style reference) |
 | http-request | HTTP request | url, method (GET/POST), body (JSON string w/ {{placeholder}}) |
 | script | Execute a JS code block | code (full function body, e.g. 'return items.map(i => i*2);') |
-| json-parse | Parse JSON data | expression (e.g. '$.data.invoice.total') |
 | delay | Wait N milliseconds | ms (number) |
 | output | Terminal sink — aggregates results and finalizes workflow payload | outputKey, format (json/text/html/buffer) |
-| loop | Iterate over an array | arrayPath (JSONPath string, e.g. '$.slides'), itemName (string, e.g. 'slide') |
-| slide-compose | Compose slide image + text | titleField, bulletsField, imageField, layout (bottom-bar / overlay / split / title-only) |
+| loop | Iterate over an array | arrayPath (JSONPath string, e.g. '$.slides'), itemName (string, e.g. 'slide'), mode (parallel or sequential) |
+| router | Conditional logic branch | condition (JS expression string, e.g. '{{$json.value}} > 5') |
+| merge | Wait/combine branches | strategy (wait-all / first-wins / append) |
+| boolean | Logical operations | operator (AND/OR/NOT), operand1, operand2 (optional) |
+| transform | Map and restructure data | mapping (JSON string template) |
+| filter | Filter items from an array | condition (JS expression string) |
+
+## Output Mapping (optional on every node)
+
+Every node supports an optional \`outputMapping\` param that reshapes the node's raw output into a clean, user-defined JSON object before it flows downstream. This is the recommended way to produce structured, predictable outputs instead of passing raw provider responses.
+
+**Format:** \`outputMapping\` is a JSON array of \`{ "key": string, "value": string }\` rows. Each \`value\` supports the same \`{{placeholder}}\` syntax as other params, where \`{{ $json.field }}\` refers to the node own raw output.
+
+**Example:**
+"outputMapping": [
+  { "key": "summary", "value": "{{ $json.text }}" },
+  { "key": "status", "value": "ok" },
+  { "key": "image", "value": "{{ $json.imageUrl }}" }
+]
+
+This transforms a raw LLM output like \`{ "text": "Hello world" }\` into \`{ "summary": "Hello world", "status": "ok" }\` before downstream nodes see it.
+
+**When to use it:**
+- After an LLM node to expose only the fields downstream nodes need (e.g. map \`{{$json.text}}\` to a semantic key).
+- After an HTTP request to flatten a nested API response.
+- After an image-gen node to rename \`imageUrl\` to something domain-specific.
+- On trigger nodes to normalize incoming webhook payloads.
+
+If \`outputMapping\` is omitted or empty \`[]\`, the node passes its raw output through unchanged.
 
 ## Data binding with {{placeholder}} syntax
 
 Nodes can reference output from upstream nodes using \`{{nodeId.field}}\` placeholders. This is how data flows through the workflow DAG.
 
-**Cross-node references:**
-- \`{{node-1}}\` — the entire output of node-1 (as JSON string)
-- \`{{node-1.event}}\` — the "event" field from node-1's output
-- \`{{node-1.slides}}\` — the "slides" array from a text-gen node's output
-
-**Loop context variables (only valid inside a loop's downstream nodes):**
-- \`{{item}}\` — the current loop item (stringified if not a string)
-- \`{{item.title}}\` — a field on the current loop item
-- \`{{index}}\` — the zero-based iteration index (0, 1, 2, ...)
+**Cross-node references (n8n style):**
+- Data is passed as an array of objects '[{"json": {...}}]'.
+- Use '{{ $json.field }}' to access fields of the current item.
+- Use '{{ $node["node-id"].json.field }}' to explicitly access upstream nodes.
 
 **Best practices for placeholders:**
 1. Always reference nodes that appear BEFORE the current node in the DAG (upstream).
-2. Use \`{{node-1}}\` as a catch-all when unsure of field names.
-3. In loop downstream nodes, use \`{{item.title}}\` where "title" is a field on each array element.
-4. The trigger node typically outputs fields like: event, contentType, and any schema-defined properties.
-5. LLM nodes with responseFormat="text" output \`{ text: "..." }\`, so reference with \`{{node-N.text}}\`. LLM nodes with responseFormat="json_object" output properties according to their jsonSchema, so you can directly reference \`{{node-N.slides}}\` if "slides" is a property.
-6. Image-gen nodes output \`{ imageUrl: "..." }\`, so reference with \`{{node-N.imageUrl}}\`.
-7. HTTP request nodes output \`{ status: 200, data: {...} }\`, reference with \`{{node-N.data}}.\`
-8. Output nodes aggregate all upstream outputs — they are the terminal sink.
+2. The trigger node typically outputs fields like: event, contentType, and any schema-defined properties.
+3. LLM nodes with responseFormat="text" output '{ "text": "..." }', so reference with '{{ $json.text }}'.
+4. Image-gen nodes output '{ "imageUrl": "..." }', so reference with '{{ $json.imageUrl }}'.
+5. HTTP request nodes output '{ "status": 200, "data": {...} }'.
+6. If a node has an outputMapping, downstream nodes see the MAPPED output, not the raw one. Reference the mapped keys with the same placeholder syntax.
 
 **Example workflow with data binding:**
-Trigger (node-1) → LLM (node-2, json_object) → Loop (node-3) → Image Gen (node-4) → Slide Compose (node-5) → Output (node-6)
+Trigger (node-1) → Router (node-2) → LLM (node-3) → Output (node-4)
 
-- node-2 prompt: "Generate a presentation outline from: {{node-1.topic}}", responseFormat: "json_object"
-- node-3 arrayPath: "$.slides" (extracts the slides array from node-2's parsed JSON output)
-- node-4 prompt: "Create an image for: {{item.title}} (slide #{{index}})"
-- node-5 uses {{item.title}}, {{item.bullets}}, and {{node-4.imageUrl}} to compose each slide
+- node-2 condition: "{{node-1.isPriority}} === true"
+- node-3 prompt: "Process high priority task: {{node-1.task}}"
 
 ## Edge rules
 
 - Workflows typically start with a "trigger" node.
 - Nodes can have multiple incoming and outgoing edges to form a Directed Acyclic Graph (DAG).
 - For parallel tasks, branch out multiple edges from a single source node to multiple target nodes.
-- For converging tasks, connect multiple source nodes to a single target node.
-- sourceHandle is "default" for all nodes.
+- For converging tasks, connect multiple source nodes to a single target node (or use a Merge node).
+- sourceHandle is usually "default". For the "router" node type, you must specify the sourceHandle as either "true" or "false" to branch logic based on the condition.
 - targetHandle is always "default".
 
 ## Response format
@@ -84,7 +101,7 @@ Respond ONLY with a raw JSON object: no markdown, no explanation, no code fences
       "position": { "x": number, "y": number },
       "data": {
         "label": "Human readable label",
-        "type": "trigger | llm | image-gen | http-request | script | json-parse | delay | output | loop | slide-compose",
+        "type": "trigger | llm | image-gen | http-request | script | delay | output | loop | router | merge | boolean | transform | filter",
         "params": { ...relevant config keys for this type... }
       }
     }
@@ -93,7 +110,8 @@ Respond ONLY with a raw JSON object: no markdown, no explanation, no code fences
     {
       "id": "edge-unique_id",
       "source": "nodeId",
-      "target": "nodeId"
+      "target": "nodeId",
+      "sourceHandle": "true" // Optional, required for 'router' node source handles ("true" or "false")
     }
   ]
 }

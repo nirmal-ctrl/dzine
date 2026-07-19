@@ -17,14 +17,24 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.sub;
-        (session.user as any).role = token.role;
+        const userObj = session.user as unknown as Record<string, unknown>;
+        userObj.id = token.sub;
+        userObj.role = token.role;
+        
+        const sessionObj = session as unknown as Record<string, unknown>;
+        sessionObj.accessToken = token.accessToken;
+        sessionObj.expiresAt = token.expiresAt;
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
+      if (account) {
+        token.accessToken = account.access_token;
+        token.expiresAt = account.expires_at;
+      }
       if (user) {
-        token.role = (user as any).role;
+        const userObj = user as unknown as Record<string, unknown>;
+        token.role = userObj.role;
       } else {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email! },

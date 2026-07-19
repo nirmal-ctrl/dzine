@@ -72,16 +72,21 @@ import {
   SquareArrowOutUpRightIcon,
   RepeatIcon,
   LayersIcon,
+  GitBranchIcon,
+  GitMergeIcon,
+  ToggleLeftIcon,
+  FilterIcon,
+  Wand2Icon
 } from "lucide-react"
 
 // Dynamic nodes typing & parameters
-type NodeType = "trigger" | "delay" | "script" | "image-gen" | "json-parse" | "http-request" | "output" | "loop" | "slide-compose" | "llm"
+type NodeType = "trigger" | "delay" | "script" | "image-gen" | "http-request" | "output" | "loop" | "llm" | "router" | "merge" | "boolean" | "transform" | "filter" | "group" | "classifier"
 
 interface NodeData {
   label: string
   type: NodeType
-  icon: React.ReactNode
-  color: string
+  icon?: React.ReactNode
+  color?: string
   params: Record<string, string>
   status: "idle" | "running" | "success" | "error"
 }
@@ -99,6 +104,8 @@ const PROVIDER_MODELS: Record<string, { id: string; name: string }[]> = {
     { id: "claude-3-opus-20240229", name: "Claude 3 Opus (Creative)" },
   ],
   google: [
+    { id: "gemini-1.5-flash", name: "gemini-1.5-flash" },
+    { id: "gemini-2.0-flash", name: "gemini-2.0-flash" },
     { id: "gemini-2.5-flash", name: "gemini-2.5-flash" },
     { id: "gemini-2.5-pro", name: "gemini-2.5-pro" },
     { id: "gemma-4-26b-a4b-it", name: "gemma-4-26b-a4b-it" },
@@ -136,12 +143,17 @@ const NODE_COLORS: Record<NodeType, { border: string, bg: string, text: string, 
   delay:        { border: "border-border",      bg: "bg-card",  text: "text-stone-600",   iconBg: "bg-stone-700",    accent: "bg-stone-100 dark:bg-stone-800/50" },
   script:       { border: "border-border",      bg: "bg-card",  text: "text-red-600",      iconBg: "bg-red-700",      accent: "bg-red-50 dark:bg-red-950/30" },
   "image-gen":  { border: "border-border",      bg: "bg-card",  text: "text-rose-600",    iconBg: "bg-rose-700",    accent: "bg-rose-50 dark:bg-rose-950/30" },
-  "json-parse": { border: "border-border",      bg: "bg-card",  text: "text-amber-600",   iconBg: "bg-amber-700",   accent: "bg-amber-50 dark:bg-amber-950/30" },
   "http-request":{ border: "border-border",     bg: "bg-card",  text: "text-sky-600",     iconBg: "bg-sky-700",     accent: "bg-sky-50 dark:bg-sky-950/30" },
   "output":      { border: "border-border",      bg: "bg-card",  text: "text-emerald-600", iconBg: "bg-emerald-700", accent: "bg-emerald-50 dark:bg-emerald-950/30" },
   "loop":        { border: "border-border",      bg: "bg-card",  text: "text-indigo-600",  iconBg: "bg-indigo-700",  accent: "bg-indigo-50 dark:bg-indigo-950/30" },
-  "slide-compose": { border: "border-border",    bg: "bg-card",  text: "text-purple-600", iconBg: "bg-purple-700",  accent: "bg-purple-50 dark:bg-purple-950/30" },
   "llm":         { border: "border-border",      bg: "bg-card",  text: "text-violet-600",  iconBg: "bg-violet-700",  accent: "bg-violet-50 dark:bg-violet-950/30" },
+  "router":      { border: "border-border",      bg: "bg-card",  text: "text-pink-600",    iconBg: "bg-pink-700",    accent: "bg-pink-50 dark:bg-pink-950/30" },
+  "merge":       { border: "border-border",      bg: "bg-card",  text: "text-cyan-600",    iconBg: "bg-cyan-700",    accent: "bg-cyan-50 dark:bg-cyan-950/30" },
+  "boolean":     { border: "border-border",      bg: "bg-card",  text: "text-fuchsia-600", iconBg: "bg-fuchsia-700", accent: "bg-fuchsia-50 dark:bg-fuchsia-950/30" },
+  "transform":   { border: "border-border",      bg: "bg-card",  text: "text-lime-600",    iconBg: "bg-lime-700",    accent: "bg-lime-50 dark:bg-lime-950/30" },
+  "filter":      { border: "border-border",      bg: "bg-card",  text: "text-orange-600",  iconBg: "bg-orange-700",  accent: "bg-orange-50 dark:bg-orange-950/30" },
+  "group":       { border: "border-border",      bg: "bg-card",  text: "text-indigo-600",  iconBg: "bg-indigo-700",  accent: "bg-indigo-50 dark:bg-indigo-950/30" },
+  "classifier":  { border: "border-border",      bg: "bg-card",  text: "text-amber-600",   iconBg: "bg-amber-700",   accent: "bg-amber-50 dark:bg-amber-950/30" },
 }
 
 interface AvailableTile {
@@ -157,13 +169,17 @@ const AVAILABLE_TILES: AvailableTile[] = [
   { name: "Trigger", description: "Webhook entry point — starts the workflow when an external event fires", type: "trigger", icon: <ZapIcon className="size-4 text-white" />, color: "slate", defaultParams: { triggerType: "webhook", webhookUrl: "", eventName: "On New Order", contentType: "application/json", inputSchema: "{}", sampleFile: "" } },
   { name: "Delay", description: "Pause execution for a fixed duration in milliseconds", type: "delay", icon: <ClockIcon className="size-4 text-white" />, color: "stone", defaultParams: { ms: "2000" } },
   { name: "LLM Node", description: "Advanced LLM — customize provider, model, structured outputs & instructions", type: "llm", icon: <BrainCircuitIcon className="size-4 text-white" />, color: "violet", defaultParams: { provider: "openai", model: "gpt-4o-mini", apiKey: "", prompt: "Generate the deck content...", temperature: "0.7", responseFormat: "text", jsonSchema: "" } },
-  { name: "Image Gen", description: "AI image generation with aspect ratio, resolution & style reference support", type: "image-gen", icon: <ImageIcon className="size-4 text-white" />, color: "rose", defaultParams: { prompt: "A hyper-realistic corporate mascot logo", aspectRatio: "1:1", numberOfImages: "1", imageSize: "1K", personGeneration: "dont_allow", referenceImage: "" } },
+  { name: "Image Gen", description: "AI image generation with aspect ratio, resolution & style reference support", type: "image-gen", icon: <ImageIcon className="size-4 text-white" />, color: "rose", defaultParams: { apiKey: "", model: "gemini-3.1-flash-image", prompt: "A hyper-realistic corporate mascot logo", aspectRatio: "1:1", numberOfImages: "1", imageSize: "1K", personGeneration: "dont_allow", referenceImage: "", temperature: "", topP: "" } },
   { name: "HTTP Request", description: "Call any REST API — GET, POST, PUT, DELETE with JSON body", type: "http-request", icon: <GlobeIcon className="size-4 text-white" />, color: "sky", defaultParams: { url: "https://api.example.com", method: "GET", body: "{}" } },
   { name: "Script", description: "Run custom JavaScript to transform or filter workflow data", type: "script", icon: <Code2Icon className="size-4 text-white" />, color: "red", defaultParams: { code: "return data.map(item => ({ ...item, processed: true }));" } },
-  { name: "JSON Parse", description: "Extract specific values from JSON using JSONPath expressions", type: "json-parse", icon: <BracesIcon className="size-4 text-white" />, color: "orange", defaultParams: { expression: "$.data.invoice.total" } },
   { name: "Output", description: "Terminal sink — aggregates results and returns the final workflow payload", type: "output", icon: <SquareArrowOutUpRightIcon className="size-4 text-white" />, color: "emerald", defaultParams: { outputKey: "result", format: "json" } },
-  { name: "Loop", description: "Iterate over an array — runs connected nodes for each item automatically", type: "loop", icon: <RepeatIcon className="size-4 text-white" />, color: "indigo", defaultParams: { arrayPath: "$.slides", itemName: "slide" } },
-  { name: "Slide Compose", description: "Overlay title & bullet text onto a generated image to produce a final slide", type: "slide-compose", icon: <LayersIcon className="size-4 text-white" />, color: "purple", defaultParams: { titleField: "title", bulletsField: "bullets", imageField: "imageUrl", layout: "bottom-bar" } },
+  { name: "Iterator / Loop", description: "Iterate over an array — run nested nodes for each item in parallel or sequentially (loop mode)", type: "loop", icon: <RepeatIcon className="size-4 text-white" />, color: "indigo", defaultParams: { arrayPath: "$.slides", itemName: "slide", mode: "parallel" } },
+  { name: "Router", description: "Branch logic based on a true/false condition", type: "router", icon: <GitBranchIcon className="size-4 text-white" />, color: "pink", defaultParams: { condition: "{{$json.value}} > 5" } },
+  { name: "Merge", description: "Wait for multiple branches and combine their data", type: "merge", icon: <GitMergeIcon className="size-4 text-white" />, color: "cyan", defaultParams: { strategy: "wait-all" } },
+  { name: "Boolean Logic", description: "Evaluate AND/OR/NOT conditions", type: "boolean", icon: <ToggleLeftIcon className="size-4 text-white" />, color: "fuchsia", defaultParams: { operator: "AND", operand1: "true", operand2: "false" } },
+  { name: "Transform", description: "Map and restructure data fields", type: "transform", icon: <Wand2Icon className="size-4 text-white" />, color: "lime", defaultParams: { mapping: "{}" } },
+  { name: "Filter", description: "Filter items in an array or stop execution", type: "filter", icon: <FilterIcon className="size-4 text-white" />, color: "orange", defaultParams: { condition: "{{$json.value}} == true" } },
+  { name: "Classifier / Match", description: "Route dynamically based on matching incoming values to custom possibilities", type: "classifier", icon: <LayersIcon className="size-4 text-white" />, color: "amber", defaultParams: { valueToMatch: "{{$json.status}}", possibilities: "new, assigned, resolved" } },
 ]
 
 // Custom Node component inside React Flow — solid, opaque, strong visual cards
@@ -204,6 +220,7 @@ const CustomWorkflowNode = ({ data }: { data: NodeData }) => {
         )}
         {data.type === "image-gen" && (
           <>
+            <p className="truncate"><span className="text-muted-foreground/50">model:</span> {data.params.model}</p>
             <p className="truncate"><span className="text-muted-foreground/50">prompt:</span> {data.params.prompt}</p>
             <p><span className="text-muted-foreground/50">size:</span> {data.params.aspectRatio} · {data.params.numberOfImages || "1"} img</p>
           </>
@@ -212,7 +229,6 @@ const CustomWorkflowNode = ({ data }: { data: NodeData }) => {
           <p className="truncate"><span className={`${colors.text} font-bold`}>{data.params.method}</span> {data.params.url}</p>
         )}
         {data.type === "script" && <p><span className="text-muted-foreground/50">js:</span> custom script loaded</p>}
-        {data.type === "json-parse" && <p className="truncate"><span className="text-muted-foreground/50">path:</span> {data.params.expression}</p>}
         {data.type === "output" && (
           <>
             <p><span className="text-muted-foreground/50">key:</span> {data.params.outputKey || "result"}</p>
@@ -223,12 +239,28 @@ const CustomWorkflowNode = ({ data }: { data: NodeData }) => {
           <>
             <p className="truncate"><span className="text-muted-foreground/50">array:</span> {data.params.arrayPath || "$.items"}</p>
             <p><span className="text-muted-foreground/50">item:</span> {data.params.itemName || "item"}</p>
+            <p><span className="text-muted-foreground/50">mode:</span> {data.params.mode || "parallel"}</p>
           </>
         )}
-        {data.type === "slide-compose" && (
+        {data.type === "router" && (
+          <p className="truncate"><span className="text-muted-foreground/50">if:</span> {data.params.condition}</p>
+        )}
+        {data.type === "merge" && (
+          <p className="truncate"><span className="text-muted-foreground/50">mode:</span> {data.params.strategy}</p>
+        )}
+        {data.type === "boolean" && (
+          <p className="truncate"><span className="text-muted-foreground/50">op:</span> {data.params.operator}</p>
+        )}
+        {data.type === "transform" && (
+          <p className="truncate"><span className="text-muted-foreground/50">map:</span> custom transform</p>
+        )}
+        {data.type === "filter" && (
+          <p className="truncate"><span className="text-muted-foreground/50">keep if:</span> {data.params.condition}</p>
+        )}
+        {data.type === "classifier" && (
           <>
-            <p className="truncate"><span className="text-muted-foreground/50">title:</span> {data.params.titleField || "title"}</p>
-            <p className="truncate"><span className="text-muted-foreground/50">layout:</span> {data.params.layout || "bottom-bar"}</p>
+            <p className="truncate"><span className="text-muted-foreground/50">value:</span> {data.params.valueToMatch || "—"}</p>
+            <p className="truncate"><span className="text-muted-foreground/50">cases:</span> {data.params.possibilities || "—"}</p>
           </>
         )}
         {data.type === "llm" && (
@@ -238,6 +270,9 @@ const CustomWorkflowNode = ({ data }: { data: NodeData }) => {
             {data.params.responseFormat === "json_object" && <p className="truncate"><span className="text-muted-foreground/50">format:</span> JSON</p>}
           </>
         )}
+        {data.params.outputMapping && data.params.outputMapping !== "[]" && (
+          <p className="truncate text-primary/70 border-t border-border/50 pt-1 mt-1"><BracesIcon className="size-2.5 inline mr-1" />output mapped</p>
+        )}
       </div>
       {data.status === "success" && (
         <div className="absolute top-2 right-2 size-2.5 bg-emerald-500 rounded-full shadow-sm border-2 border-card" />
@@ -245,18 +280,116 @@ const CustomWorkflowNode = ({ data }: { data: NodeData }) => {
       {data.status === "running" && (
         <div className="absolute top-2 right-2 size-2.5 bg-amber-500 rounded-full animate-ping shadow-sm border-2 border-card" />
       )}
-      <Handle 
-        type="source" 
-        position={Position.Right} 
-        style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--primary)', border: '2px solid var(--background)' }} 
-      />
+      
+      {data.type === "router" ? (
+        <>
+          <Handle 
+            id="true"
+            type="source" 
+            position={Position.Right} 
+            style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#10b981', border: '2px solid var(--background)', top: '30%' }} 
+          />
+          <Handle 
+            id="false"
+            type="source" 
+            position={Position.Right} 
+            style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#ef4444', border: '2px solid var(--background)', top: '70%' }} 
+          />
+        </>
+      ) : data.type === "classifier" ? (
+        (data.params.possibilities || "billing,support,sales")
+          .split(",")
+          .map(c => c.trim())
+          .filter(Boolean)
+          .map((opt, idx, arr) => {
+            const count = arr.length;
+            const topPct = count > 1 ? 15 + (idx / (count - 1)) * 70 : 50;
+            return (
+              <React.Fragment key={opt}>
+                <Handle 
+                  id={opt}
+                  type="source" 
+                  position={Position.Right} 
+                  style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--primary)', border: '2px solid var(--background)', top: `${topPct}%` }} 
+                />
+                <div 
+                  className="absolute text-[8px] font-bold font-mono text-foreground/70 tracking-tight pointer-events-none select-none" 
+                  style={{ right: '14px', top: `calc(${topPct}% - 6px)` }}
+                >
+                  {opt}
+                </div>
+              </React.Fragment>
+            )
+          })
+      ) : (
+        <Handle 
+          type="source" 
+          position={Position.Right} 
+          style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--primary)', border: '2px solid var(--background)' }} 
+        />
+      )}
+    </div>
+  )
+}
+
+// Group Node Component for Visual Encapsulation
+const GroupWorkflowNode = ({ data }: { data: NodeData }) => {
+  return (
+    <div className={`w-full h-full border-2 border-dashed border-indigo-500/50 bg-indigo-500/5 rounded-xl pointer-events-none relative transition-colors ${data.status === "running" ? "border-amber-500 bg-amber-500/10" : ""}`}>
+      <div className="absolute -top-3 left-4 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900 border border-indigo-500/50 rounded text-[10px] font-mono font-bold text-indigo-700 dark:text-indigo-300 shadow-sm flex items-center gap-1.5">
+        <RepeatIcon className="size-3" />
+        {data.label}
+      </div>
     </div>
   )
 }
 
 const nodeTypes = {
-  custom: CustomWorkflowNode
+  custom: CustomWorkflowNode,
+  group: GroupWorkflowNode
 }
+
+// Droppable Fields for Variable Drag & Drop
+const DroppableInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => {
+  const handleDrop = (e: React.DragEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const data = e.dataTransfer.getData("text/plain");
+    if (data) {
+      const input = e.currentTarget;
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const newVal = input.value.substring(0, start) + data + input.value.substring(end);
+      
+      // trigger react onChange
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      nativeInputValueSetter?.call(input, newVal);
+      const ev = new Event("input", { bubbles: true });
+      input.dispatchEvent(ev);
+    }
+  };
+  return <Input ref={ref} {...props} onDragOver={e => e.preventDefault()} onDrop={handleDrop} />;
+});
+DroppableInput.displayName = "DroppableInput";
+
+const DroppableTextarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>((props, ref) => {
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    const data = e.dataTransfer.getData("text/plain");
+    if (data) {
+      const input = e.currentTarget;
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const newVal = input.value.substring(0, start) + data + input.value.substring(end);
+      
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      nativeInputValueSetter?.call(input, newVal);
+      const ev = new Event("input", { bubbles: true });
+      input.dispatchEvent(ev);
+    }
+  };
+  return <Textarea ref={ref} {...props} onDragOver={e => e.preventDefault()} onDrop={handleDrop} />;
+});
+DroppableTextarea.displayName = "DroppableTextarea";
 
 // Collapsible Thought Component for Modern Aesthetic
 const ThoughtBlock = ({ thought }: { thought: string }) => {
@@ -290,49 +423,124 @@ interface WorkflowEditorClientProps {
 }
 
 // ─── Template Resolver ───────────────────────────────────────────────
-// Scans string values for {{nodeId.field}}, {{index}}, and {{item.field}} patterns
+// Scans string values for n8n style {{ $json.field }} and {{ $node["id"].json.field }}
 // and replaces them with actual values from the node output registry.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function resolveTemplate(text: string, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }): string {
-  return text.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_match, path: string) => {
+  if (typeof text !== "string") {
+    if (text === null || text === undefined) return ""
+    text = String(text)
+  }
+  
+  // Update regex to match n8n variables like $json.property or $node["id"].json.property
+  return text.replace(/\{\{\s*([$\w.\[\]"'-]+)\s*\}\}/g, (_match: string, path: string): string => {
+    // Clean whitespace
+    path = path.trim()
+    
+    // Support $node["id"].json.field
+    const nodeMatch = path.match(/^\$node\["([^"]+)"\]\.json(?:\.(.+))?$/)
+    if (nodeMatch) {
+      const nodeId = nodeMatch[1]
+      const fieldPath = nodeMatch[2]
+      
+      const nodeOutput = registry[nodeId]
+      if (!nodeOutput) return `{{ ${path} }}`
+      
+      // If it's an array n8n style, take the first item's json
+      let baseVal = nodeOutput
+      if (Array.isArray(nodeOutput) && nodeOutput[0]?.json) {
+        baseVal = nodeOutput[0].json
+      }
+
+      if (!fieldPath) {
+        return typeof baseVal === "string" ? baseVal : JSON.stringify(baseVal)
+      }
+      
+      const parts = fieldPath.split(".")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let val: any = baseVal
+      for (const p of parts) {
+        if (val == null) return `{{ ${path} }}`
+        val = val[p]
+      }
+      return val == null ? `{{ ${path} }}` : String(val)
+    }
+
+    // Support $json.field (from current context / upstream item)
+    if (path.startsWith("$json")) {
+      let baseVal = loopCtx?.item
+      if (!baseVal) {
+        // Fallback: grab the last upstream node's output if no explicit item context
+        const keys = Object.keys(registry)
+        if (keys.length > 0) {
+          const lastOutput = registry[keys[keys.length - 1]]
+          if (Array.isArray(lastOutput) && lastOutput[0]?.json) {
+            baseVal = lastOutput[0].json
+          } else {
+            baseVal = lastOutput
+          }
+        }
+      } else {
+        if (baseVal.json) baseVal = baseVal.json
+      }
+      
+      if (path === "$json") {
+        return typeof baseVal === "string" ? baseVal : JSON.stringify(baseVal)
+      }
+      
+      const fieldPath = path.substring(6) // remove "$json."
+      const parts = fieldPath.split(".")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let val: any = baseVal
+      for (const p of parts) {
+        if (val == null) return `{{ ${path} }}`
+        val = val[p]
+      }
+      return val == null ? `{{ ${path} }}` : String(val)
+    }
+
+    // Support custom loop item variable name (e.g. {{slideTitle}} or {{slideTitle.field}})
+    // The loop node lets users name the current item (itemName param). We must resolve
+    // {{<itemName>}} and {{<itemName>.field}} to the current loop item's value.
+    if (loopCtx?.itemName && path === loopCtx.itemName) {
+      const val = loopCtx.item
+      return typeof val === "string" ? val : JSON.stringify(val)
+    }
+    if (loopCtx?.itemName && path.startsWith(`${loopCtx.itemName}.`)) {
+      const fieldPath = path.substring(loopCtx.itemName.length + 1)
+      let val = loopCtx.item
+      const parts = fieldPath.split(".")
+      for (const p of parts) {
+        if (val == null) return `{{${path}}}`
+        val = val[p]
+      }
+      return val == null ? `{{${path}}}` : String(val)
+    }
+
+    // Support {{index}} to reference the current loop iteration index
+    if (loopCtx && path === "index") {
+      return String(loopCtx.index)
+    }
+
+    // Fallback original variables for backwards compatibility
     const parts = path.split(".")
-    // ── Loop context tokens ──
     if (parts[0] === "item") {
       if (!loopCtx) return `{{${path}}}`
-      const item = loopCtx.item
-      if (parts.length === 1) {
-        // {{item}} — stringify the whole item
-        return typeof item === "string" ? item : JSON.stringify(item)
-      }
-      // {{item.field}} — drill into item object
-      let val = item
+      let val = loopCtx.item
+      if (parts.length === 1) return typeof val === "string" ? val : JSON.stringify(val)
       for (let i = 1; i < parts.length; i++) {
         if (val == null) return `{{${path}}}`
         val = val[parts[i]]
       }
       return val == null ? `{{${path}}}` : String(val)
     }
-    if (parts[0] === "index") {
-      if (!loopCtx) return `{{${path}}}`
-      return String(loopCtx.index)
-    }
-    // ── Node output lookup: {{nodeId.field}} ──
-    const nodeId = parts[0]
-    const nodeOutput = registry[nodeId]
-    if (!nodeOutput) return `{{${path}}}`
-    // {{nodeId}} (no field) — stringify entire output
-    if (parts.length === 1) return typeof nodeOutput === "string" ? nodeOutput : JSON.stringify(nodeOutput)
-    // {{nodeId.field.subfield...}} — drill down
-    let val: unknown = nodeOutput
-    for (let i = 1; i < parts.length; i++) {
-      if (val == null || typeof val !== "object") return `{{${path}}}`
-      val = (val as Record<string, unknown>)[parts[i]]
-    }
-    return val == null ? `{{${path}}}` : String(val)
+    
+    return `{{${path}}}`
   })
 }
 
 /** Deep-resolve all string values (including nested objects/arrays) in a node's params. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function resolveParams(params: Record<string, string>, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }): Record<string, string> {
   const resolved: Record<string, string> = {}
@@ -340,6 +548,384 @@ function resolveParams(params: Record<string, string>, registry: Record<string, 
     resolved[key] = resolveTemplate(value, registry, loopCtx)
   }
   return resolved
+}
+
+/** Parse an output mapping JSON string (array format) into editable field rows. */
+function parseOutputMappingFields(mappingStr: string): { key: string; value: string }[] {
+  if (!mappingStr || mappingStr === "[]" || mappingStr === "{}") return []
+  try {
+    const parsed = JSON.parse(mappingStr)
+    if (Array.isArray(parsed)) {
+      return parsed.map((f: { key?: string; value?: string }) => ({ key: String(f.key || ""), value: String(f.value || "") }))
+    }
+    // Backward compat: object format { "key": "value" }
+    if (typeof parsed === "object" && parsed !== null) {
+      return Object.entries(parsed).map(([key, value]) => ({ key, value: String(value) }))
+    }
+  } catch { /* ignore */ }
+  return []
+}
+
+/** Serialize field rows into a JSON array string for storage in node params. */
+function serializeOutputMappingFields(fields: { key: string; value: string }[]): string {
+  return JSON.stringify(fields, null, 2)
+}
+
+/** Apply user-defined output mapping to reshape a node's raw output before it flows downstream. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyOutputMapping(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rawOutput: any,
+  mappingStr: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  registry: Record<string, any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  loopCtx?: { item: any; index: number; itemName?: string }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  const fields = parseOutputMappingFields(mappingStr)
+  if (fields.length === 0) return rawOutput
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: Record<string, any> = {}
+    // Build a context where $json refers to the node's own raw output
+    const mappingCtx = {
+      item: { json: rawOutput },
+      index: loopCtx?.index ?? 0,
+      itemName: loopCtx?.itemName
+    }
+    for (const field of fields) {
+      if (!field.key.trim()) continue
+      const resolved = resolveTemplate(field.value, registry, mappingCtx)
+      try {
+        result[field.key.trim()] = JSON.parse(resolved)
+      } catch {
+        result[field.key.trim()] = resolved
+      }
+    }
+    return Object.keys(result).length > 0 ? result : rawOutput
+  } catch {
+    return rawOutput
+  }
+}
+
+/** Visual schema builder for configuring node output mapping.
+ *  Mounted with key={selectedNode.id} so state resets naturally when switching nodes. */
+const OutputMappingSection = ({
+  selectedNode,
+  updateNodeData
+}: {
+  selectedNode: Node<NodeData>
+  updateNodeData: (updatedFields: Partial<NodeData>) => void
+}) => {
+  const [fields, setFields] = React.useState<{ key: string; value: string }[]>(() =>
+    parseOutputMappingFields(selectedNode.data.params.outputMapping || "[]")
+  )
+
+  const commit = (newFields: { key: string; value: string }[]) => {
+    setFields(newFields)
+    updateNodeData({ params: { ...selectedNode.data.params, outputMapping: serializeOutputMappingFields(newFields) } })
+  }
+
+  return (
+    <div className="space-y-3 pt-4 border-t">
+      <div className="p-3 border border-primary/20 bg-primary/5 space-y-1 rounded">
+        <div className="flex items-center gap-1.5">
+          <BracesIcon className="size-3 text-primary" />
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Output Mapping (Optional)</span>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Reshape the output of this node before it flows downstream. Use <code className="text-foreground">{"{{$json.field}}"}</code> to reference the raw output, or drag upstream variables from above.
+        </p>
+      </div>
+
+      {fields.map((field, idx) => (
+        <div key={idx} className="flex gap-2 items-start">
+          <Input
+            value={field.key}
+            onChange={(e) => {
+              const next = [...fields]
+              next[idx] = { ...next[idx], key: e.target.value }
+              commit(next)
+            }}
+            className="rounded-none text-xs h-9 font-mono flex-1"
+            placeholder="outputKey"
+          />
+          <DroppableInput
+            value={field.value}
+            onChange={(e) => {
+              const next = [...fields]
+              next[idx] = { ...next[idx], value: e.target.value }
+              commit(next)
+            }}
+            className="rounded-none text-xs h-9 font-mono flex-[2]"
+            placeholder="{{$json.field}}"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              const next = [...fields]
+              next.splice(idx, 1)
+              commit(next)
+            }}
+            className="shrink-0 size-9 text-muted-foreground hover:text-destructive"
+          >
+            <Trash2Icon className="size-3.5" />
+          </Button>
+        </div>
+      ))}
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => commit([...fields, { key: "", value: "" }])}
+        className="w-full text-xs h-9 rounded-none border-dashed"
+      >
+        + Add Output Field
+      </Button>
+
+      {fields.some(f => f.key.trim()) && (
+        <details className="text-[10px] text-muted-foreground">
+          <summary className="cursor-pointer hover:text-foreground flex items-center gap-1">
+            <BracesIcon className="size-3" />
+            Preview JSON template
+          </summary>
+          <pre className="font-mono bg-muted/30 border border-border p-3 rounded-md overflow-x-auto mt-2">
+            {selectedNode.data.params.outputMapping || "[]"}
+          </pre>
+        </details>
+      )}
+    </div>
+  )
+}
+
+/** Parse a JSON Schema string into editable field rows (name + type + description). */
+function parseSchemaFields(schemaStr: string): { name: string; type: string; description: string }[] {
+  if (!schemaStr || schemaStr === "{}") return []
+  try {
+    const parsed = JSON.parse(schemaStr)
+    if (parsed?.properties && typeof parsed.properties === "object") {
+      return Object.entries(parsed.properties).map(([name, prop]) => ({
+        name,
+        type: (prop as Record<string, unknown>)?.type as string || "string",
+        description: (prop as Record<string, unknown>)?.description as string || ""
+      }))
+    }
+  } catch { /* ignore */ }
+  return []
+}
+
+/** Serialize field rows into a JSON Schema string for storage in node params. */
+function serializeSchemaFields(fields: { name: string; type: string; description: string }[]): string {
+  if (fields.length === 0) return "{}"
+  const properties: Record<string, { type: string; description?: string }> = {}
+  for (const f of fields) {
+    if (!f.name.trim()) continue
+    const prop: { type: string; description?: string } = { type: f.type || "string" }
+    if (f.description.trim()) prop.description = f.description
+    properties[f.name.trim()] = prop
+  }
+  return JSON.stringify({ type: "object", properties }, null, 2)
+}
+
+/** Visual schema builder for the trigger node's expected payload schema. */
+const SchemaBuilderSection = ({
+  selectedNode,
+  updateNodeData
+}: {
+  selectedNode: Node<NodeData>
+  updateNodeData: (updatedFields: Partial<NodeData>) => void
+}) => {
+  const [isRawMode, setIsRawMode] = React.useState(false)
+  const [fields, setFields] = React.useState<{ name: string; type: string; description: string }[]>(() =>
+    parseSchemaFields(selectedNode.data.params.inputSchema || "{}")
+  )
+  const [rawJson, setRawJson] = React.useState(() => selectedNode.data.params.inputSchema || "{}")
+  const [schemaError, setSchemaError] = React.useState<string | null>(null)
+
+  const commitFields = (newFields: { name: string; type: string; description: string }[]) => {
+    setFields(newFields)
+    const jsonStr = serializeSchemaFields(newFields)
+    setRawJson(jsonStr)
+    updateNodeData({ params: { ...selectedNode.data.params, inputSchema: jsonStr } })
+  }
+
+  const handleRawChange = (val: string) => {
+    setRawJson(val)
+    if (!val.trim()) {
+      setSchemaError(null)
+      updateNodeData({ params: { ...selectedNode.data.params, inputSchema: "{}" } })
+      setFields([])
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(val)
+      // Check if parsed has correct root format (at least valid JSON structure)
+      if (typeof parsed !== "object" || parsed === null) {
+        throw new Error("Schema must be a valid JSON Object")
+      }
+      setSchemaError(null)
+      // Update the actual node state
+      updateNodeData({ params: { ...selectedNode.data.params, inputSchema: JSON.stringify(parsed, null, 2) } })
+      // Sync fields in background
+      setFields(parseSchemaFields(JSON.stringify(parsed)))
+    } catch (err: unknown) {
+      setSchemaError(err instanceof Error ? err.message : "Malformed JSON")
+    }
+  }
+
+  const toggleMode = (rawMode: boolean) => {
+    if (!rawMode) {
+      // Switching to visual mode: populate flat fields from the raw schema (if valid)
+      try {
+        const parsed = JSON.parse(rawJson)
+        setFields(parseSchemaFields(JSON.stringify(parsed)))
+        setSchemaError(null)
+      } catch (err: unknown) {
+        // If it was invalid, reset error or warn them
+        setSchemaError("Cannot switch to visual mode with invalid JSON. Please fix errors first.")
+        return
+      }
+    } else {
+      // Switching to raw mode: sync rawJson text area state with latest inputSchema
+      setRawJson(selectedNode.data.params.inputSchema || "{}")
+    }
+    setIsRawMode(rawMode)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between border-b pb-2">
+        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Expected Payload Schema</Label>
+        <div className="flex gap-1.5 bg-muted p-0.5 rounded border border-border">
+          <button
+            type="button"
+            onClick={() => toggleMode(false)}
+            className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide transition-all ${
+              !isRawMode ? "bg-card text-foreground shadow-sm font-black" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Visual
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleMode(true)}
+            className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide transition-all ${
+              isRawMode ? "bg-card text-foreground shadow-sm font-black" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Raw JSON
+          </button>
+        </div>
+      </div>
+
+      {!isRawMode ? (
+        <div className="space-y-3">
+          {fields.map((field, idx) => (
+            <div key={idx} className="space-y-1.5 p-2.5 border border-border rounded-md bg-muted/10">
+              <div className="flex gap-2 items-center">
+                <Input
+                  value={field.name}
+                  onChange={(e) => {
+                    const next = [...fields]
+                    next[idx] = { ...next[idx], name: e.target.value }
+                    commitFields(next)
+                  }}
+                  className="rounded-none text-xs h-8 font-mono flex-1"
+                  placeholder="fieldName"
+                />
+                <select
+                  value={field.type}
+                  onChange={(e) => {
+                    const next = [...fields]
+                    next[idx] = { ...next[idx], type: e.target.value }
+                    commitFields(next)
+                  }}
+                  className="flex h-8 w-[90px] items-center justify-between border border-input bg-background px-2 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring text-foreground rounded-none"
+                >
+                  <option value="string">string</option>
+                  <option value="number">number</option>
+                  <option value="boolean">boolean</option>
+                  <option value="object">object</option>
+                  <option value="array">array</option>
+                </select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    const next = [...fields]
+                    next.splice(idx, 1)
+                    commitFields(next)
+                  }}
+                  className="shrink-0 size-8 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2Icon className="size-3" />
+                </Button>
+              </div>
+              <Input
+                value={field.description}
+                onChange={(e) => {
+                  const next = [...fields]
+                  next[idx] = { ...next[idx], description: e.target.value }
+                  commitFields(next)
+                }}
+                className="rounded-none text-[10px] h-8 text-muted-foreground"
+                placeholder="Description (optional)"
+              />
+            </div>
+          ))}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => commitFields([...fields, { name: "", type: "string", description: "" }])}
+            className="w-full text-xs h-9 rounded-none border-dashed"
+          >
+            + Add Schema Field
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Textarea
+            value={rawJson}
+            onChange={(e) => handleRawChange(e.target.value)}
+            className="rounded-none text-xs min-h-[180px] font-mono resize-none leading-relaxed border-border focus-visible:ring-1"
+            placeholder={`{\n  "type": "object",\n  "properties": {\n    "items": {\n      "type": "array",\n      "description": "Complex list of products"\n    }\n  }\n}`}
+          />
+          {schemaError ? (
+            <p className="text-[10px] text-red-500 font-medium font-mono leading-tight p-2 bg-red-500/5 border border-red-500/20">
+              ⚠️ {schemaError}
+            </p>
+          ) : (
+            <p className="text-[10px] text-emerald-500 font-semibold font-mono leading-tight p-2 bg-emerald-500/5 border border-emerald-500/20">
+              ✓ JSON Schema is valid
+            </p>
+          )}
+          <p className="text-[9px] text-muted-foreground/60 leading-relaxed">
+            Specify a full JSON Schema. You can define nested keys, default values, array items, and any complex objects.
+          </p>
+        </div>
+      )}
+
+      {fields.some(f => f.name.trim()) && !isRawMode && (
+        <details className="text-[10px] text-muted-foreground">
+          <summary className="cursor-pointer hover:text-foreground flex items-center gap-1 select-none">
+            <BracesIcon className="size-3" />
+            Preview JSON Schema
+          </summary>
+          <pre className="font-mono bg-muted/30 border border-border p-3 rounded-md overflow-x-auto mt-2">
+            {selectedNode.data.params.inputSchema || "{}"}
+          </pre>
+        </details>
+      )}
+    </div>
+  )
 }
 
 /** Build a map of upstream node IDs → node data for variable hinting. */
@@ -362,6 +948,7 @@ function getUpstreamNodeIds(edges: Edge[], nodeId: string): string[] {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getAvailableVariables(
   currentNodeId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodeOutputs: Record<string, any>,
   allNodes: Node<NodeData>[],
   edges: Edge[],
@@ -390,6 +977,20 @@ function getAvailableVariables(
     vars.push(`{{item}}`, `{{item.}}`, `{{index}}`)
   }
   return [...new Set(vars)].sort()
+}
+
+/** Clean markdown code fences and whitespace from a JSON string. */
+function cleanJsonString(str: string): string {
+  let cleaned = str.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.substring(7);
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.substring(3);
+  }
+  if (cleaned.endsWith("```")) {
+    cleaned = cleaned.substring(0, cleaned.length - 3);
+  }
+  return cleaned.trim();
 }
 
 /** Topological sort of nodes based on edges. */
@@ -430,7 +1031,7 @@ function topologicalSort(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>
 
 /** Quick check if any param value contains a {{placeholder}}. */
 function hasPlaceholders(params: Record<string, string>): boolean {
-  return Object.values(params).some(v => /\{\{/.test(v))
+  return Object.values(params).some(v => typeof v === "string" && /\{\{/.test(v))
 }
 
 /** Collect all downstream nodes reachable from a given node (for loop sub-execution). */
@@ -458,7 +1059,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [aiGenerating, setAiGenerating] = React.useState(false)
   const [isRunning, setIsExecuting] = React.useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [logs, setLogs] = React.useState<{ nodeId?: string, label?: string, type?: NodeType, status?: "running" | "success" | "error", message: string, data?: any }[]>([])
+  const [logs, setLogs] = React.useState<{ id?: string, nodeId?: string, label?: string, type?: NodeType, status?: "running" | "success" | "error", message: string, data?: any }[]>([])
   
   // Dialog state for workflow inputs
   const [runInputData, setRunInputData] = React.useState<Record<string, string>>({})
@@ -469,6 +1070,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [selectedEdge, setSelectedEdge] = React.useState<Edge | null>(null)
   const [isSheetOpen, setIsSheetOpen] = React.useState(false)
   const [isRunSheetOpen, setIsRunSheetOpen] = React.useState(false)
+  const [maximizedImage, setMaximizedImage] = React.useState<string | null>(null)
 
   // AI Assistant Chat panel states
   const { settings } = useAiSettings()
@@ -517,21 +1119,33 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       } else if (n.data.type === "script") {
         icon = <Code2Icon className="size-4 text-white" />
         color = "red"
-      } else if (n.data.type === "json-parse") {
-        icon = <BracesIcon className="size-4 text-white" />
-        color = "amber"
       } else if (n.data.type === "output") {
         icon = <SquareArrowOutUpRightIcon className="size-4 text-white" />
         color = "emerald"
       } else if (n.data.type === "loop") {
         icon = <RepeatIcon className="size-4 text-white" />
         color = "indigo"
-      } else if (n.data.type === "slide-compose") {
-        icon = <LayersIcon className="size-4 text-white" />
-        color = "purple"
       } else if (n.data.type === "llm") {
         icon = <BrainCircuitIcon className="size-4 text-white" />
         color = "violet"
+      } else if (n.data.type === "router") {
+        icon = <GitBranchIcon className="size-4 text-white" />
+        color = "pink"
+      } else if (n.data.type === "classifier") {
+        icon = <LayersIcon className="size-4 text-white" />
+        color = "amber"
+      } else if (n.data.type === "merge") {
+        icon = <GitMergeIcon className="size-4 text-white" />
+        color = "cyan"
+      } else if (n.data.type === "boolean") {
+        icon = <ToggleLeftIcon className="size-4 text-white" />
+        color = "fuchsia"
+      } else if (n.data.type === "transform") {
+        icon = <Wand2Icon className="size-4 text-white" />
+        color = "lime"
+      } else if (n.data.type === "filter") {
+        icon = <FilterIcon className="size-4 text-white" />
+        color = "orange"
       }
       return {
         ...n,
@@ -797,115 +1411,172 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     setSelectedEdge(null)
   }
 
-  // Load default nodes on mount — slide‑deck generator pipeline (full data‑binding demo)
+  // Load default nodes on mount — comprehensive example demonstrating all node types & features
   React.useEffect(() => {
     const defaultNodes: Node<NodeData>[] = [
-      // ── Step 1: Trigger ──────────────────────────────────────────
+      // 1. TRIGGER — webhook entry with schema-defined payload (uses Schema Builder)
       {
         id: "node-1",
         type: "custom",
-        position: { x: 100, y: 300 },
+        position: { x: 50, y: 350 },
         data: {
-          label: "Trigger (Build Deck)",
+          label: "Pitch Input Webhook",
           type: "trigger",
           icon: <ZapIcon className="size-4 text-white" />,
           color: "slate",
           status: "idle",
-          params: { triggerType: "webhook", webhookUrl: "https://api.quickz.ai/v1/workflow-webhook", eventName: "Build Slide Deck", contentType: "application/json", inputSchema: "{\"properties\":{\"topic\":{\"type\":\"string\"},\"slideCount\":{\"type\":\"number\"}}}", sampleFile: "" }
+          params: {
+            triggerType: "webhook",
+            webhookUrl: "",
+            eventName: "New Pitch Generation",
+            contentType: "application/json",
+            inputSchema: JSON.stringify({
+              type: "object",
+              properties: {
+                context: { type: "string", description: "Entire business vision, market size, and solution details" }
+              }
+            }, null, 2),
+            sampleFile: "",
+            outputMapping: JSON.stringify([
+              { key: "context", value: "{{ $json.context }}" }
+            ], null, 2)
+          }
         }
       },
-      // ── Step 2: LLM Node — generates slide outlines ─────────────
+      // 2. LLM — generate outline & slide titles (Slide Outline Generator)
       {
         id: "node-2",
         type: "custom",
-        position: { x: 420, y: 300 },
+        position: { x: 370, y: 350 },
         data: {
-          label: "LLM (Slide Outlines)",
+          label: "Slide Outline Generator",
           type: "llm",
           icon: <BrainCircuitIcon className="size-4 text-white" />,
           color: "violet",
           status: "idle",
-          params: { 
-            provider: "openai",
-            model: "gpt-4o",
-            prompt: "You are a presentation designer. The topic is \"{{node-1.topic}}\". Generate {{node-1.slideCount}} slides.", 
+          params: {
+            provider: "google",
+            model: "gemini-1.5-flash",
+            apiKey: "",
+            prompt: "You are an expert pitch coach. Analyze this complete business plan:\n{{ $node[\"node-1\"].json.context }}\n\nGenerate a list of exactly 4 slide deck titles that we need to create (e.g., Problem, Solution, Market Gap, Go-To-Market).\n\nReturn strictly a JSON array of slide titles under the key \"slides\". Example format:\n{\n  \"slides\": [\"Problem Statement\", \"Solution\", \"Market Gap\", \"Go-To-Market Strategy\"]\n}",
             temperature: "0.7",
             responseFormat: "json_object",
-            jsonSchema: "{\"type\":\"object\",\"properties\":{\"slides\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"bullets\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}}}"
+            jsonSchema: "",
+            outputMapping: JSON.stringify([
+              { key: "slides", value: "{{ $json.slides }}" }
+            ], null, 2)
           }
         }
       },
-      // ── Step 3: Loop — iterate over each slide ──────────────────
+      // 3. LOOP — iterate over slides (Slide Iterator — parallel mode by default)
       {
         id: "node-3",
         type: "custom",
-        position: { x: 740, y: 300 },
+        position: { x: 690, y: 350 },
         data: {
-          label: "Loop (For Each Slide)",
+          label: "Slide Iterator",
           type: "loop",
           icon: <RepeatIcon className="size-4 text-white" />,
           color: "indigo",
           status: "idle",
-          params: { arrayPath: "$.slides", itemName: "slide" }
+          params: {
+            arrayPath: "$.slides",
+            itemName: "slideTitle",
+            mode: "parallel"
+          }
         }
       },
-      // ── Step 4: Image Gen — create image for the slide ──────────
+      // Group node for loop body
+      {
+        id: "group-1",
+        type: "group",
+        position: { x: 1010, y: 230 },
+        style: { width: 560, height: 240 },
+        data: {
+          label: "Parallel Slide Generation",
+          type: "group",
+          params: {},
+          status: "idle"
+        }
+      },
+      // 4. LLM — detail and prompt generator (Inside loop)
       {
         id: "node-4",
         type: "custom",
-        position: { x: 1060, y: 150 },
+        parentId: "group-1",
+        extent: "parent",
+        position: { x: 40, y: 50 },
         data: {
-          label: "Image Gen (Slide Visual)",
+          label: "Detail & Prompt Writer",
+          type: "llm",
+          icon: <BrainCircuitIcon className="size-4 text-white" />,
+          color: "violet",
+          status: "idle",
+          params: {
+            provider: "google",
+            model: "gemini-1.5-flash",
+            apiKey: "",
+            prompt: "Write a high-quality pitch slide write-up.\n\nCurrent Slide Title: {{slideTitle}}\nOverall Business Context: {{ $node[\"node-1\"].json.context }}\n\nWrite 3-4 professional bullet points of content for this slide.\nAlso, write a highly descriptive, artistic image generation prompt for this slide's background vector illustration (describing styling, colors, and layout).\n\nReturn strictly as a JSON object:\n{\n  \"slideContent\": \"bullet points text here...\",\n  \"imagePrompt\": \"vivid vector image prompt here...\"\n}",
+            temperature: "0.7",
+            responseFormat: "json_object",
+            jsonSchema: "",
+            outputMapping: JSON.stringify([
+              { key: "slideContent", value: "{{ $json.slideContent }}" },
+              { key: "imagePrompt", value: "{{ $json.imagePrompt }}" }
+            ], null, 2)
+          }
+        }
+      },
+      // 5. IMAGE GEN — generate illustration (Inside loop)
+      {
+        id: "node-5",
+        type: "custom",
+        parentId: "group-1",
+        extent: "parent",
+        position: { x: 310, y: 50 },
+        data: {
+          label: "Slide Illustrator",
           type: "image-gen",
           icon: <ImageIcon className="size-4 text-white" />,
           color: "rose",
           status: "idle",
-          params: { prompt: "A professional presentation visual for: \"{{item.title}}\" — clean, corporate style, no text overlay", aspectRatio: "16:9", numberOfImages: "1", imageSize: "2K", personGeneration: "dont_allow", referenceImage: "" }
+          params: {
+            apiKey: "",
+            model: "gemini-3.1-flash-image",
+            prompt: "{{ $node[\"node-4\"].json.imagePrompt }}",
+            aspectRatio: "16:9",
+            numberOfImages: "1",
+            imageSize: "1K",
+            personGeneration: "dont_allow",
+            referenceImage: "",
+            outputMapping: JSON.stringify([
+              { key: "image", value: "{{ $json.imageUrl }}" }
+            ], null, 2)
+          }
         }
       },
-      // ── Step 5: Slide Compose — overlay text on image ───────────
-      {
-        id: "node-5",
-        type: "custom",
-        position: { x: 1060, y: 450 },
-        data: {
-          label: "Slide Compose",
-          type: "slide-compose",
-          icon: <LayersIcon className="size-4 text-white" />,
-          color: "purple",
-          status: "idle",
-          params: { titleField: "title", bulletsField: "bullets", imageField: "imageUrl", layout: "bottom-bar" }
-        }
-      },
-      // ── Step 6: Output — aggregate final deck ───────────────────
+      // 6. OUTPUT — final pitch deck outcome
       {
         id: "node-6",
         type: "custom",
-        position: { x: 1380, y: 300 },
+        position: { x: 1650, y: 350 },
         data: {
-          label: "Output (Final Deck)",
+          label: "Final Pitch Deck",
           type: "output",
           icon: <SquareArrowOutUpRightIcon className="size-4 text-white" />,
           color: "emerald",
           status: "idle",
-          params: { outputKey: "deck", format: "json" }
+          params: { outputKey: "pitch_deck", format: "json" }
         }
-      },
+      }
     ]
 
     const defaultEdges: Edge[] = [
-      // trigger → llm
       { id: "edge-1-2", source: "node-1", target: "node-2", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
-      // llm → loop
       { id: "edge-2-3", source: "node-2", target: "node-3", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
-      // loop → image-gen (loop-downstream, {{item.title}} bound)
-      { id: "edge-3-4", source: "node-3", target: "node-4", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2, stroke: "#4338ca" }, interactionWidth: 20 },
-      // loop → slide-compose (loop-downstream, {{item.bullets}} + {{node-4.imageUrl}} bound)
-      { id: "edge-3-5", source: "node-3", target: "node-5", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2, stroke: "#4338ca" }, interactionWidth: 20 },
-      // image-gen → slide-compose (data flow: imageUrl)
-      { id: "edge-4-5", source: "node-4", target: "node-5", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2, stroke: "#be123c" }, interactionWidth: 20 },
-      // slide-compose → output
-      { id: "edge-5-6", source: "node-5", target: "node-6", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
+      { id: "edge-3-4", source: "node-3", target: "node-4", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
+      { id: "edge-4-5", source: "node-4", target: "node-5", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
+      { id: "edge-5-6", source: "node-5", target: "node-6", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 }
     ]
 
     setNodes(defaultNodes)
@@ -1005,22 +1676,41 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     const allNodes = currentNodesRef.current
     const triggerNode = allNodes.find(n => n.data.type === "trigger")
     
-    if (triggerNode && triggerNode.data.params.inputSchema && triggerNode.data.params.inputSchema !== "{}") {
-      try {
-        const schema = JSON.parse(triggerNode.data.params.inputSchema)
-        if (schema.properties) {
-          const keys = Object.keys(schema.properties)
-          if (keys.length > 0) {
-            setExpectedInputs(keys)
-            const initialData: Record<string, string> = {}
-            keys.forEach(k => initialData[k] = "")
-            setRunInputData(initialData)
-            setIsAwaitingInputs(true)
-            return
+    let needsInput = false
+    let keys: string[] = []
+
+    if (triggerNode) {
+      // Check if schema requires inputs
+      if (triggerNode.data.params.inputSchema && triggerNode.data.params.inputSchema !== "{}") {
+        try {
+          const schema = JSON.parse(triggerNode.data.params.inputSchema)
+          if (schema.properties) {
+            keys = Object.keys(schema.properties)
+            if (keys.length > 0) needsInput = true
           }
-        }
-      } catch { /* ignore bad json */ }
+        } catch { /* ignore bad json */ }
+      }
+      
+      // Also require input if it's a file upload type, to give them a chance to provide a file or mock it
+      if (triggerNode.data.params.contentType === "multipart/form-data" || triggerNode.data.params.contentType === "image/png") {
+        if (!keys.includes("_file_")) keys.push("_file_")
+        needsInput = true
+      }
     }
+    
+    if (needsInput) {
+      setExpectedInputs(keys)
+      const initialData: Record<string, string> = {}
+      keys.forEach(k => initialData[k] = "")
+      // Pre-fill file if sampleFile exists on the node
+      if (keys.includes("_file_") && triggerNode?.data.params.sampleFile) {
+        initialData["_file_"] = triggerNode.data.params.sampleFile
+      }
+      setRunInputData(initialData)
+      setIsAwaitingInputs(true)
+      return
+    }
+    
     // No inputs needed, run directly
     setIsAwaitingInputs(false)
     simulateExecution()
@@ -1031,9 +1721,12 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     setIsAwaitingInputs(false)
     const allNodes = currentNodesRef.current
     const allEdges = currentEdgesRef.current
-    if (allNodes.length === 0) return
+    if (allNodes.length === 0) {
+      setIsExecuting(false)
+      return
+    }
     setIsExecuting(true)
-    setLogs([{ message: `[Executor] Initializing execution run (topological order)...` }])
+    setLogs([{ id: Math.random().toString(), message: `[Executor] Initializing execution run (topological order)...` }])
 
     // Set all nodes to idle
     setNodes(prev => prev.map(n => ({
@@ -1041,21 +1734,52 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       data: { ...n.data, status: "idle" as const }
     })))
 
-    // Topological sort for correct data-flow order
-    const sortedNodes = topologicalSort(allNodes, allEdges)
-    
-    // ─── Node Output Registry ──────────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const nodeOutputs: Record<string, any> = {}
+    try {
+      // Topological sort for correct data-flow order
+      const sortedNodes = topologicalSort(allNodes, allEdges)
+      
+      // ─── Node Output Registry ──────────────────────────────────────
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nodeOutputs: Record<string, any> = {}
 
-    // Track which nodes we've already processed (to skip loop-internal nodes in main pass)
-    const processedNodeIds = new Set<string>()
+      // Track which nodes we've already processed (to skip loop-internal nodes in main pass)
+      const processedNodeIds = new Set<string>()
+      const activeEdgeIds = new Set<string>()
+      const loopInternalNodeIds = new Set<string>()
 
-    let step = 0
+      // Any entry-point node (like the trigger node) activates its outgoing edges by default on start
+      const triggerNodes = allNodes.filter(n => n.data.type === "trigger" || !allEdges.some(e => e.target === n.id))
+      for (const tn of triggerNodes) {
+        allEdges.filter(e => e.source === tn.id).forEach(e => activeEdgeIds.add(e.id))
+      }
 
-    for (const node of sortedNodes) {
-      // Skip nodes already processed inside a loop sub-execution
-      if (processedNodeIds.has(node.id)) continue
+      let step = 0
+
+      for (const node of sortedNodes) {
+      // Skip group nodes from execution pass as they are visual containers
+      if (node.data.type === "group" || node.type === "group") continue
+
+      // Skip nodes already processed inside a loop sub-execution or identified as loop internal
+      if (processedNodeIds.has(node.id) || loopInternalNodeIds.has(node.id)) continue
+
+      // Path Activation Logic:
+      // A node is executed ONLY if it's an entry point (no incoming edges) OR has at least one active incoming path.
+      const hasIncoming = allEdges.some(e => e.target === node.id)
+      const hasActiveIncoming = allEdges.filter(e => e.target === node.id).some(e => activeEdgeIds.has(e.id))
+
+      if (hasIncoming && !hasActiveIncoming) {
+        // Bypassed/Skipped because no active route leads here
+        setLogs(prev => [
+          ...prev,
+          {
+            nodeId: node.id,
+            label: node.data.label,
+            type: node.data.type,
+            message: `[Bypassed] Node not executed (inactive route path)`
+          }
+        ])
+        continue
+      }
 
       step++
       
@@ -1068,9 +1792,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         data: { ...n.data, params: resolvedParams, status: "running" as const }
       } : n))
 
+      const logId = Math.random().toString(36).substring(7)
       setLogs(prev => [
         ...prev, 
         { 
+          id: logId,
           nodeId: node.id,
           label: node.data.label,
           type: node.data.type,
@@ -1079,92 +1805,179 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         }
       ])
 
-      // Helper to update the last log entry with success and data
+      // Helper to update the correct log entry with success and data
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const markNodeSuccess = (data: any, extraMsg?: string) => {
-        setLogs(prev => {
-          const newLogs = [...prev]
-          const lastIdx = newLogs.length - 1
-          if (lastIdx >= 0) {
-            newLogs[lastIdx] = {
-              ...newLogs[lastIdx],
-              status: "success",
-              message: extraMsg ? `${newLogs[lastIdx].message}\n${extraMsg}` : newLogs[lastIdx].message,
-              data
-            }
-          }
-          return newLogs
-        })
+        setLogs(prev => prev.map(log => log.id === logId ? {
+          ...log,
+          status: "success",
+          message: extraMsg ? `${log.message}\n${extraMsg}` : log.message,
+          data
+        } : log))
       }
 
-      // ── Execute & store mock output per node type ────────────────
-      if (node.data.type === "trigger") {
-        // Store mock trigger payload
-        const triggerPayload: Record<string, unknown> = {
-          event: resolvedParams.eventName || "On New Order",
-          contentType: resolvedParams.contentType || "application/json",
-        }
-        if (resolvedParams.sampleFile) {
-          triggerPayload.file = "(base64 uploaded file)"
-        }
-        
-        // Try to parse inputSchema if present
-        if (resolvedParams.inputSchema && resolvedParams.inputSchema !== "{}") {
-          try {
-            const schema = JSON.parse(resolvedParams.inputSchema)
-            if (schema.properties) {
-              for (const key of Object.keys(schema.properties)) {
-                // If user provided input via modal, use it, else mock it
-                if (customInputs && customInputs[key]) {
-                  // Try to cast to number if needed
-                  const type = schema.properties[key].type
-                  triggerPayload[key] = type === "number" ? Number(customInputs[key]) : customInputs[key]
-                } else {
-                  triggerPayload[key] = `(mock ${key})`
+      try {
+        // ── Execute & store mock output per node type ────────────────
+        if (node.data.type === "trigger") {
+          // Store trigger payload
+          const triggerPayload: Record<string, unknown> = {
+            event: resolvedParams.eventName || "On New Order",
+            contentType: resolvedParams.contentType || "application/json",
+          }
+          
+          // Handle file
+          if (customInputs && customInputs["_file_"]) {
+            triggerPayload.file = customInputs["_file_"]
+          } else if (resolvedParams.sampleFile) {
+            triggerPayload.file = resolvedParams.sampleFile
+          }
+          
+          // Try to parse inputSchema if present
+          if (resolvedParams.inputSchema && resolvedParams.inputSchema !== "{}") {
+            try {
+              const schema = JSON.parse(resolvedParams.inputSchema)
+              if (schema.properties) {
+                for (const key of Object.keys(schema.properties)) {
+                  // If user provided input via modal, use it, else default/empty (disabled mock execution)
+                  if (customInputs && customInputs[key] !== undefined) {
+                    // Try to cast to number if needed
+                    const type = schema.properties[key].type
+                    triggerPayload[key] = type === "number" ? Number(customInputs[key]) : customInputs[key]
+                  } else {
+                    const prop = schema.properties[key]
+                    triggerPayload[key] = (prop && prop.default !== undefined) ? prop.default : ""
+                  }
                 }
               }
-            }
-          } catch { /* ignore bad JSON */ }
-        }
-        nodeOutputs[node.id] = triggerPayload
-        markNodeSuccess(triggerPayload, `Received ${resolvedParams.contentType || "json"} payload via webhook`)
-      } else if (node.data.type === "delay") {
+            } catch { /* ignore bad JSON */ }
+          }
+          nodeOutputs[node.id] = triggerPayload
+          markNodeSuccess(triggerPayload, `Received ${resolvedParams.contentType || "json"} payload via webhook`)
+        } else if (node.data.type === "delay") {
         nodeOutputs[node.id] = { delayed: true, ms: resolvedParams.ms || "2000" }
         markNodeSuccess(nodeOutputs[node.id], `Paused thread for ${resolvedParams.ms || 1000}ms`)
-      } else if (node.data.type === "llm") {
-        const provider = resolvedParams.provider || "openai"
-        const model = resolvedParams.model || "gpt-4o-mini"
-        let msg = `Called LLM (${provider}/${model})`
-        if (resolvedParams.apiKey) msg += `\nUsing custom API key: ********************`
-        if (resolvedParams.prompt) msg += `\nPrompt: "${resolvedParams.prompt.slice(0, 50)}..."`
-
-        if (resolvedParams.responseFormat === "json_object") {
-          msg += `\nFormatting: JSON Object requested`
-          let mockJson = { generated: `content from ${model}` }
-          if (resolvedParams.jsonSchema) {
-            try {
-              const schema = JSON.parse(resolvedParams.jsonSchema)
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              mockJson = Object.keys(schema.properties || {}).reduce((acc, key) => ({...acc, [key]: `(mock ${key})`}), {}) as any
-            } catch { /* ignore */ }
-          }
-          nodeOutputs[node.id] = mockJson
-        } else {
-          nodeOutputs[node.id] = { text: `Generated content from ${model} using ${provider}...` }
-        }
-        markNodeSuccess(nodeOutputs[node.id], msg)
       } else if (node.data.type === "image-gen") {
-        let msg = ""
+        let msg = `Generating image via ${resolvedParams.model || "gemini-3.1-flash-image"}...\n`
         if (resolvedParams.referenceImage) {
-          msg += `Generating image with style reference transfer (image loaded)...\n`
-        } else {
-          msg += `Generating standard image from text prompt...\n`
+          msg += `(With style reference image)\n`
         }
         if (resolvedParams.prompt) {
           msg += `Prompt: "${resolvedParams.prompt.slice(0, 50)}..."`
         }
-        nodeOutputs[node.id] = { imageUrl: "https://placehold.co/1024x1024/png?text=Generated+Image", aspectRatio: resolvedParams.aspectRatio || "1:1" }
-        markNodeSuccess(nodeOutputs[node.id], msg)
+        
+        try {
+          const model = resolvedParams.model || "gemini-3.1-flash-image";
+          const numImages = parseInt(resolvedParams.numberOfImages || "1");
+          
+          const isImagen4 = model === "imagen-4.0-generate-001";
+          
+          let targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${resolvedParams.apiKey || ""}`;
+          let payload: any = {};
+          
+          if (isImagen4) {
+            // Imagen 4 schema (e.g. predict or generateImages)
+            // But based on @google/genai SDK, generateImages translates to:
+            // POST .../models/imagen-4.0-generate-001:predict
+            // with { instances: [...], parameters: { ... } }
+            // Let's use the predict endpoint shape for Vertex/Google AI compatibility:
+            targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${resolvedParams.apiKey || ""}`;
+            payload = {
+              instances: [{ prompt: resolvedParams.prompt || "" }],
+              parameters: {
+                sampleCount: numImages,
+                aspectRatio: resolvedParams.aspectRatio && resolvedParams.aspectRatio !== "auto" ? resolvedParams.aspectRatio : "1:1",
+                personGeneration: resolvedParams.personGeneration || "dont_allow"
+              }
+            };
+          } else {
+            // Gemini model schema
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const parts: any[] = [{ text: resolvedParams.prompt || "" }];
+            if (resolvedParams.referenceImage) {
+              const matches = resolvedParams.referenceImage.match(/^data:(image\/\w+);base64,(.*)$/);
+              if (matches && matches.length === 3) {
+                parts.push({
+                  inlineData: {
+                    mimeType: matches[1],
+                    data: matches[2]
+                  }
+                });
+              }
+            }
+
+            const imageConfig: Record<string, any> = {};
+            if (resolvedParams.aspectRatio && resolvedParams.aspectRatio !== "auto") {
+              imageConfig.aspectRatio = resolvedParams.aspectRatio;
+            }
+            if (resolvedParams.imageSize) {
+              imageConfig.imageSize = resolvedParams.imageSize;
+            }
+
+            payload = {
+              contents: [{ parts }],
+              generationConfig: {
+                responseModalities: ["IMAGE"],
+                candidateCount: numImages,
+                ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
+                ...(resolvedParams.temperature ? { temperature: parseFloat(resolvedParams.temperature) } : {}),
+                ...(resolvedParams.topP ? { topP: parseFloat(resolvedParams.topP) } : {})
+              }
+            };
+          }
+
+          // Call the server-side proxy which secures/injects the API key if missing
+          const res = await fetch("/api/workflows/proxy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: targetUrl,
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: payload
+            })
+          });
+          const json = await res.json();
+          
+          if (!res.ok) throw new Error(json.error?.message || "Google Imagen API Error");
+          
+          let generatedImageUrls: string[] = [];
+          
+          if (isImagen4) {
+             if (!json.predictions || json.predictions.length === 0) {
+                throw new Error('No images were generated by the model');
+             }
+             generatedImageUrls = json.predictions.map((p: any) => {
+                if (p.bytesBase64Encoded) return `data:${p.mimeType || 'image/png'};base64,${p.bytesBase64Encoded}`;
+                return "";
+             }).filter(Boolean);
+          } else {
+            if (!json.candidates?.[0]?.content?.parts || json.candidates[0].content.parts.length === 0) {
+              throw new Error('No images were generated by the model');
+            }
+            generatedImageUrls = json.candidates[0].content.parts
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              .filter((part: any) => part.inlineData && part.inlineData.data)
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              .map((part: any) => `data:${part.inlineData?.mimeType || 'image/png'};base64,${part.inlineData?.data}`);
+          }
+
+          if (generatedImageUrls.length === 0) {
+            throw new Error('No valid image data found in response');
+          }
+
+          nodeOutputs[node.id] = { imageUrl: generatedImageUrls[0], imageUrls: generatedImageUrls, aspectRatio: resolvedParams.aspectRatio || "1:1" };
+          markNodeSuccess(nodeOutputs[node.id], msg);
+        } catch(err: unknown) {
+          msg += `\n⚠ Image Gen Error: ${err instanceof Error ? err.message : String(err)}`;
+          nodeOutputs[node.id] = { error: err instanceof Error ? err.message : String(err) };
+          setNodes(prev => prev.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: "error" as const } } : n));
+          setLogs(prev => {
+            const newLogs = [...prev];
+            newLogs[newLogs.length - 1] = { ...newLogs[newLogs.length - 1], status: "error", message: msg, data: { error: err instanceof Error ? err.message : String(err) } };
+            return newLogs;
+          });
+          break; // stop execution
+        }
       } else if (node.data.type === "http-request") {
         const method = resolvedParams.method || "GET"
         const url = resolvedParams.url || "https://api.example.com"
@@ -1176,8 +1989,132 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         if (Object.keys(body as object).length > 0) {
           msg += `\nBody: ${JSON.stringify(body).slice(0, 50)}...`
         }
-        nodeOutputs[node.id] = { status: 200, data: { id: "mock-123", message: "Request succeeded (simulated)" } }
-        markNodeSuccess(nodeOutputs[node.id], msg)
+        
+        try {
+          const fetchOptions: RequestInit = { method };
+          if (method !== "GET" && method !== "HEAD") {
+            fetchOptions.headers = { "Content-Type": "application/json" };
+            fetchOptions.body = typeof body === "string" ? body : JSON.stringify(body);
+          }
+          
+          const res = await fetch(url, fetchOptions);
+          const contentType = res.headers.get("content-type") || "";
+          let data;
+          if (contentType.includes("application/json")) {
+            data = await res.json();
+          } else {
+            data = await res.text();
+          }
+          
+          nodeOutputs[node.id] = { status: res.status, data };
+          markNodeSuccess(nodeOutputs[node.id], msg);
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          msg += `\n⚠ HTTP Request Failed: ${errMsg}`;
+          nodeOutputs[node.id] = { error: errMsg };
+          
+          setNodes(prev => prev.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: "error" as const } } : n));
+          setLogs(prev => {
+            const newLogs = [...prev];
+            newLogs[newLogs.length - 1] = { ...newLogs[newLogs.length - 1], status: "error", message: msg, data: { error: errMsg } };
+            return newLogs;
+          });
+          break; // Stop execution on HTTP failure
+        }
+      } else if (node.data.type === "llm") {
+        const provider = resolvedParams.provider || "openai"
+        let model = resolvedParams.model || "gpt-4o-mini"
+        
+        // Ensure the model actually belongs to the selected provider (fixes AI generation mismatches)
+        const isKnownModel = Object.values(PROVIDER_MODELS).flat().some(m => m.id === model);
+        if (isKnownModel) {
+          if (provider === "google" && !PROVIDER_MODELS["google"].some(m => m.id === model)) model = "gemini-2.5-flash";
+          else if (provider === "anthropic" && !PROVIDER_MODELS["anthropic"].some(m => m.id === model)) model = "claude-3-5-sonnet-20241022";
+          else if (provider === "openai" && !PROVIDER_MODELS["openai"].some(m => m.id === model)) model = "gpt-4o-mini";
+          else if (provider === "groq" && !PROVIDER_MODELS["groq"].some(m => m.id === model)) model = "llama-3.3-70b-versatile";
+          else if (provider === "open-source" && !PROVIDER_MODELS["open-source"].some(m => m.id === model)) model = "meta-llama/llama-3.1-405b-instruct";
+        }
+
+        let msg = `Called LLM (${provider}/${model})`
+        if (resolvedParams.apiKey) msg += `\nUsing custom API key: ********************`
+        if (resolvedParams.prompt) msg += `\nPrompt: "${resolvedParams.prompt.slice(0, 50)}..."`
+
+        try {
+          let content = "";
+          const targetUrl = provider === "google"
+            ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${resolvedParams.apiKey || ""}`
+            : (provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : (provider === "anthropic" ? "https://api.anthropic.com/v1/messages" : "https://api.openai.com/v1/chat/completions"));
+
+          const targetHeaders: Record<string, string> = {
+            "Content-Type": "application/json"
+          };
+          if (resolvedParams.apiKey) {
+            if (provider === "anthropic") {
+              targetHeaders["x-api-key"] = resolvedParams.apiKey;
+              targetHeaders["anthropic-version"] = "2023-06-01";
+              targetHeaders["anthropic-dangerous-direct-browser-access"] = "true";
+            } else if (provider !== "google") {
+              targetHeaders["Authorization"] = `Bearer ${resolvedParams.apiKey}`;
+            }
+          }
+
+          const payload = provider === "google" ? {
+            contents: [{ parts: [{ text: resolvedParams.prompt }] }],
+            generationConfig: {
+              temperature: Number(resolvedParams.temperature || 0.7),
+              responseMimeType: resolvedParams.responseFormat === "json_object" ? "application/json" : undefined
+            }
+          } : {
+            model,
+            messages: [{ role: "user", content: resolvedParams.prompt }],
+            temperature: Number(resolvedParams.temperature || 0.7),
+            ...(provider === "anthropic" ? { max_tokens: 4096 } : { response_format: resolvedParams.responseFormat === "json_object" ? { type: "json_object" } : undefined })
+          };
+
+          const res = await fetch("/api/workflows/proxy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: targetUrl,
+              method: "POST",
+              headers: targetHeaders,
+              body: payload
+            })
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            const errDetail = typeof json.error === "object" && json.error !== null 
+              ? (json.error.message || JSON.stringify(json.error)) 
+              : (json.error || "LLM API Error");
+            throw new Error(errDetail);
+          }
+
+          if (provider === "anthropic") {
+            content = json.content?.[0]?.text || "";
+          } else if (provider === "google") {
+            content = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          } else {
+            content = json.choices?.[0]?.message?.content || "";
+          }
+          if (!content) {
+            throw new Error(`Empty response from ${provider} model.`);
+          }
+
+          if (resolvedParams.responseFormat === "json_object") {
+            nodeOutputs[node.id] = JSON.parse(cleanJsonString(content));
+          } else {
+            nodeOutputs[node.id] = { text: content };
+          }
+          markNodeSuccess(nodeOutputs[node.id], msg);
+          // Apply output mapping before continuing to next node (LLM success path skips the bottom delay)
+          if (resolvedParams.outputMapping && resolvedParams.outputMapping !== "[]") {
+            nodeOutputs[node.id] = applyOutputMapping(nodeOutputs[node.id], resolvedParams.outputMapping, nodeOutputs)
+          }
+        } catch(err: unknown) {
+          msg += `\n⚠ LLM Error: ${err instanceof Error ? err.message : String(err)}`;
+          nodeOutputs[node.id] = { error: err instanceof Error ? err.message : String(err) };
+          throw err;
+        }
       } else if (node.data.type === "script") {
         let msg = `Executing custom JavaScript...`
         // Execute the code in a sandboxed context (limited eval)
@@ -1202,17 +2139,115 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               return newLogs
             })
             nodeOutputs[node.id] = scriptResult
-            continue
+            break
           }
         }
         nodeOutputs[node.id] = scriptResult
         markNodeSuccess(nodeOutputs[node.id], msg)
-      } else if (node.data.type === "json-parse") {
-        // Get first upstream node's output
-        const upstreamIds = getUpstreamNodeIds(allEdges, node.id)
-        const upstreamOutput = upstreamIds.length > 0 ? nodeOutputs[upstreamIds[0]] : null
-        nodeOutputs[node.id] = { value: upstreamOutput ? JSON.stringify(upstreamOutput).slice(0, 100) : "(no upstream data)", expression: resolvedParams.expression }
-        markNodeSuccess(nodeOutputs[node.id], `Extracted "${resolvedParams.expression || "$.data.invoice.total"}" from upstream data`)
+      } else if (node.data.type === "router") {
+        // Evaluate the condition
+        let result = false
+        try {
+          // Extremely simple simulated evaluation for mock purposes
+          const condition = resolvedParams.condition || "false"
+          if (condition.includes("==")) {
+             const parts = condition.split("==").map(s => s.trim())
+             result = parts[0] === parts[1]
+          } else if (condition.includes(">")) {
+             const parts = condition.split(">").map(s => s.trim())
+             result = Number(parts[0]) > Number(parts[1])
+          } else if (condition.trim() === "true") {
+             result = true
+          }
+        } catch (e) {
+           console.error("Router evaluation error", e)
+        }
+        
+        nodeOutputs[node.id] = { branch: result ? "true" : "false", evaluated: result }
+        markNodeSuccess(nodeOutputs[node.id], `Routed to branch: ${result ? "TRUE" : "FALSE"}`)
+
+        // Activate outgoing edges that match the chosen handle
+        const activeHandle = result ? "true" : "false"
+        allEdges
+          .filter(e => e.source === node.id && e.sourceHandle === activeHandle)
+          .forEach(e => activeEdgeIds.add(e.id))
+      } else if (node.data.type === "classifier") {
+        const valToMatch = resolvedParams.valueToMatch || ""
+        const possibilities = (resolvedParams.possibilities || "billing,support,sales")
+          .split(",")
+          .map(c => c.trim())
+          .filter(Boolean)
+        
+        // Match case: check if incoming value exactly matches or contains the possibility name
+        let chosen = possibilities[0] || "billing"
+        
+        // Dynamic semantic fuzzy match: check exact, then substring, then split word intersection
+        const valClean = valToMatch.toLowerCase().trim()
+        
+        // 1. Exact match
+        let foundMatch = false
+        for (const opt of possibilities) {
+          const optClean = opt.toLowerCase().trim()
+          if (valClean === optClean) {
+            chosen = opt
+            foundMatch = true
+            break
+          }
+        }
+        
+        // 2. Substring fallback (e.g., valClean contains optClean or vice versa)
+        if (!foundMatch) {
+          for (const opt of possibilities) {
+            const optClean = opt.toLowerCase().trim()
+            if (valClean.includes(optClean) || optClean.includes(valClean)) {
+              chosen = opt
+              foundMatch = true
+              break
+            }
+          }
+        }
+        
+        // 3. Word-intersection fallback (e.g., "closed one" matches "closed-won")
+        if (!foundMatch) {
+          const valWords = valClean.split(/[\s\-_]+/).filter(w => w.length >= 3)
+          for (const opt of possibilities) {
+            const optClean = opt.toLowerCase().trim()
+            const optWords = optClean.split(/[\s\-_]+/).filter(w => w.length >= 3)
+            const hasOverlap = valWords.some(vw => optWords.some(ow => vw.startsWith(ow) || ow.startsWith(vw)))
+            if (hasOverlap) {
+              chosen = opt
+              foundMatch = true
+              break
+            }
+          }
+        }
+        
+        nodeOutputs[node.id] = { chosenMatch: chosen, value: valToMatch }
+        markNodeSuccess(nodeOutputs[node.id], `Matched incoming value "${valToMatch}" and routed to branch: "${chosen.toUpperCase()}"`)
+
+        // Activate outgoing edges that match the chosen possibility/handle
+        allEdges
+          .filter(e => e.source === node.id && e.sourceHandle === chosen)
+          .forEach(e => activeEdgeIds.add(e.id))
+      } else if (node.data.type === "merge") {
+         const upstreamIds = getUpstreamNodeIds(allEdges, node.id)
+         const aggregated: Record<string, unknown> = {}
+         for (const uid of upstreamIds) {
+           if (nodeOutputs[uid]) {
+             aggregated[uid] = nodeOutputs[uid]
+           }
+         }
+         nodeOutputs[node.id] = { mergedData: aggregated, strategy: resolvedParams.strategy }
+         markNodeSuccess(nodeOutputs[node.id], `Merged ${Object.keys(aggregated).length} branches using ${resolvedParams.strategy || "wait-all"} strategy`)
+      } else if (node.data.type === "boolean") {
+         nodeOutputs[node.id] = { result: true, operator: resolvedParams.operator }
+         markNodeSuccess(nodeOutputs[node.id], `Evaluated boolean logic (${resolvedParams.operator || "AND"})`)
+      } else if (node.data.type === "transform") {
+         nodeOutputs[node.id] = { transformed: true }
+         markNodeSuccess(nodeOutputs[node.id], `Applied data transformation`)
+      } else if (node.data.type === "filter") {
+         nodeOutputs[node.id] = { filtered: true, passed: true }
+         markNodeSuccess(nodeOutputs[node.id], `Filter condition evaluated`)
       } else if (node.data.type === "loop") {
         // Get the array from upstream
         const upstreamIds = getUpstreamNodeIds(allEdges, node.id)
@@ -1233,100 +2268,305 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         }
         
         const itemName = resolvedParams.itemName || "slide"
+        const loopMode = resolvedParams.mode || "parallel"
         const loopResults: unknown[] = []
         
         // Get downstream nodes from this loop node
-        const downstreamNodes = getDownstreamNodes(node.id, allNodes, allEdges)
-        
-        markNodeSuccess(null, `Iterating array at path "${resolvedParams.arrayPath || "$.slides"}"...`)
+        // Auto-heal: Ensure all nodes downstream of the loop node (excluding output sinks and groups) are assigned to the group
+        const associatedGroup = allNodes.find(n => n.type === "group" || n.data.type === "group")
+        const groupId = associatedGroup?.id || "group-1"
+        const downstreamAll = getDownstreamNodes(node.id, allNodes, allEdges)
+        downstreamAll.forEach(dn => {
+          if (dn.id !== node.id && dn.data.type !== "output" && dn.type !== "group" && dn.data.type !== "group" && !dn.parentId) {
+            dn.parentId = groupId
+            setNodes(prev => prev.map(n => n.id === dn.id ? { ...n, parentId: groupId } : n))
+          }
+        })
 
-        for (let idx = 0; idx < arrData.length; idx++) {
-          const item = arrData[idx]
-          
-          // Build loop context
+        const downstreamNodes = getDownstreamNodes(node.id, allNodes, allEdges).filter(n => n.parentId)
+        
+        // Mark all these internal nodes as loopInternal so they are skipped in the main pass
+        downstreamNodes.forEach(dn => loopInternalNodeIds.add(dn.id))
+
+        markNodeSuccess(null, `Iterating array at path "${resolvedParams.arrayPath || "$.slides"}" in ${loopMode.toUpperCase()} mode...`)
+
+        // Visual feedback for group node if exists
+        setNodes(prev => prev.map(n => n.type === "group" ? { ...n, data: { ...n.data, status: "running" as const } } : n))
+
+        // Shared iteration runner — used for both parallel and sequential modes
+        const runIteration = async (item: unknown, idx: number) => {
           const loopCtx = { item, index: idx, itemName }
           
-          // Execute each downstream node for this iteration (topological order within downstream)
+          // Isolate node outputs locally to prevent parallel iterations from overwriting each other!
+          const localNodeOutputs = { ...nodeOutputs }
+
+          // Execute each downstream node sequentially WITHIN this specific parallel iteration
           const subSorted = topologicalSort(downstreamNodes, allEdges)
           for (const subNode of subSorted) {
-            if (processedNodeIds.has(subNode.id)) continue
+            // Skip the visual group node itself
+            if (subNode.type === "group") continue
+
+            // Mark node globally as processed
             processedNodeIds.add(subNode.id)
             
-            const subResolved = resolveParams(subNode.data.params, nodeOutputs, loopCtx)
+            const subResolved = resolveParams(subNode.data.params, localNodeOutputs, loopCtx)
 
             setNodes(prev => prev.map(n => n.id === subNode.id ? {
               ...n,
               data: { ...n.data, params: subResolved, status: "running" as const }
             } : n))
 
+            const logId = Math.random().toString(36).substring(7)
             setLogs(prev => [
               ...prev, 
               { 
+                id: logId,
                 nodeId: subNode.id,
-                label: subNode.data.label,
+                label: `${subNode.data.label} (Iter ${idx + 1})`,
                 type: subNode.data.type,
                 status: "running",
-                message: `[Loop iter ${idx}] Executing...`
+                message: `[Loop iter ${idx + 1}] Executing...`
               }
             ])
 
             // Helper for subnodes
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const markSubNodeSuccess = (data: any) => {
-              setLogs(prev => {
-                const newLogs = [...prev]
-                const lastIdx = newLogs.length - 1
-                if (lastIdx >= 0) {
-                  newLogs[lastIdx] = {
-                    ...newLogs[lastIdx],
-                    status: "success",
-                    data
+              setLogs(prev => prev.map(log => log.id === logId ? {
+                ...log,
+                status: "success",
+                data
+              } : log))
+            }
+            
+            try {
+              if (subNode.data.type === "llm") {
+                const provider = subResolved.provider || "openai";
+                let model = subResolved.model || "gpt-4o-mini";
+                const isKnownModel = Object.values(PROVIDER_MODELS).flat().some(m => m.id === model);
+                if (isKnownModel) {
+                  if (provider === "google" && !PROVIDER_MODELS["google"].some(m => m.id === model)) model = "gemini-2.5-flash";
+                  else if (provider === "anthropic" && !PROVIDER_MODELS["anthropic"].some(m => m.id === model)) model = "claude-3-5-sonnet-20241022";
+                  else if (provider === "openai" && !PROVIDER_MODELS["openai"].some(m => m.id === model)) model = "gpt-4o-mini";
+                  else if (provider === "groq" && !PROVIDER_MODELS["groq"].some(m => m.id === model)) model = "llama-3.3-70b-versatile";
+                  else if (provider === "open-source" && !PROVIDER_MODELS["open-source"].some(m => m.id === model)) model = "meta-llama/llama-3.1-405b-instruct";
+                }
+                
+                let content = "";
+                const targetUrl = provider === "google"
+                  ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${subResolved.apiKey || ""}`
+                  : (provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : (provider === "anthropic" ? "https://api.anthropic.com/v1/messages" : "https://api.openai.com/v1/chat/completions"));
+
+                const targetHeaders: Record<string, string> = {
+                  "Content-Type": "application/json"
+                };
+                if (subResolved.apiKey) {
+                  if (provider === "anthropic") {
+                    targetHeaders["x-api-key"] = subResolved.apiKey;
+                    targetHeaders["anthropic-version"] = "2023-06-01";
+                    targetHeaders["anthropic-dangerous-direct-browser-access"] = "true";
+                  } else if (provider !== "google") {
+                    targetHeaders["Authorization"] = `Bearer ${subResolved.apiKey}`;
                   }
                 }
-                return newLogs
-              })
-            }
-            
-            // Quick mock output for sub-node
-            if (subNode.data.type === "llm") {
-              nodeOutputs[subNode.id] = { text: `Generated for ${itemName} #${idx + 1}` }
-            } else if (subNode.data.type === "image-gen") {
-              nodeOutputs[subNode.id] = { imageUrl: `https://placehold.co/1024x1024/png?text=${itemName}+${idx + 1}` }
-            } else if (subNode.data.type === "slide-compose") {
-              nodeOutputs[subNode.id] = { 
-                slide: true, 
-                index: idx,
-                title: (item as Record<string, unknown>)?.[subResolved.titleField || "title"] || `Slide ${idx + 1}`,
-                imageUrl: "https://placehold.co/1024x768/png?text=Composed+Slide"
-              }
-            } else {
-              nodeOutputs[subNode.id] = { result: `Iteration ${idx + 1} output` }
-            }
 
-            await new Promise(resolve => setTimeout(resolve, 600))
-            setNodes(prev => prev.map(n => n.id === subNode.id ? {
-              ...n,
-              data: { ...n.data, status: "success" as const }
-            } : n))
-            
-            markSubNodeSuccess(nodeOutputs[subNode.id])
+                const payload = provider === "google" ? {
+                  contents: [{ parts: [{ text: subResolved.prompt }] }],
+                  generationConfig: { temperature: Number(subResolved.temperature || 0.7), responseMimeType: subResolved.responseFormat === "json_object" ? "application/json" : undefined }
+                } : {
+                  model,
+                  messages: [{ role: "user", content: subResolved.prompt }],
+                  temperature: Number(subResolved.temperature || 0.7),
+                  ...(provider === "anthropic" ? { max_tokens: 4096 } : { response_format: subResolved.responseFormat === "json_object" ? { type: "json_object" } : undefined })
+                };
+
+                const res = await fetch("/api/workflows/proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: targetUrl,
+                    method: "POST",
+                    headers: targetHeaders,
+                    body: payload
+                  })
+                });
+                const json = await res.json();
+                if (!res.ok) {
+                  const errDetail = typeof json.error === "object" && json.error !== null 
+                    ? (json.error.message || JSON.stringify(json.error)) 
+                    : (json.error || "LLM API Error");
+                  throw new Error(errDetail);
+                }
+
+                if (provider === "anthropic") {
+                  content = json.content?.[0]?.text || "";
+                } else if (provider === "google") {
+                  content = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                } else {
+                  content = json.choices?.[0]?.message?.content || "";
+                }
+                if (!content) {
+                  throw new Error(`Empty response from ${provider} model.`);
+                }
+                
+                localNodeOutputs[subNode.id] = subResolved.responseFormat === "json_object" ? JSON.parse(cleanJsonString(content)) : { text: content };
+              } else if (subNode.data.type === "image-gen") {
+                const model = subResolved.model || "gemini-3.1-flash-image";
+                const numImages = parseInt(subResolved.numberOfImages || "1");
+                const isImagen4 = model === "imagen-4.0-generate-001";
+                
+                let targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${subResolved.apiKey || ""}`;
+                let payload: any = {};
+                
+                if (isImagen4) {
+                  targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${subResolved.apiKey || ""}`;
+                  payload = {
+                    instances: [{ prompt: subResolved.prompt || "" }],
+                    parameters: {
+                      sampleCount: numImages,
+                      aspectRatio: subResolved.aspectRatio && subResolved.aspectRatio !== "auto" ? subResolved.aspectRatio : "1:1",
+                      personGeneration: subResolved.personGeneration || "dont_allow"
+                    }
+                  };
+                } else {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const parts: any[] = [{ text: subResolved.prompt || "" }];
+                  if (subResolved.referenceImage) {
+                    const matches = subResolved.referenceImage.match(/^data:(image\/\w+);base64,(.*)$/);
+                    if (matches && matches.length === 3) {
+                      parts.push({
+                        inlineData: {
+                          mimeType: matches[1],
+                          data: matches[2]
+                        }
+                      });
+                    }
+                  }
+
+                  const imageConfig: Record<string, any> = {};
+                  if (subResolved.aspectRatio && subResolved.aspectRatio !== "auto") {
+                    imageConfig.aspectRatio = subResolved.aspectRatio;
+                  }
+                  if (subResolved.imageSize) {
+                    imageConfig.imageSize = subResolved.imageSize;
+                  }
+
+                  payload = {
+                    contents: [{ parts }],
+                    generationConfig: { 
+                      responseModalities: ["IMAGE"], 
+                      candidateCount: numImages,
+                      ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
+                      ...(subResolved.temperature ? { temperature: parseFloat(subResolved.temperature) } : {}),
+                      ...(subResolved.topP ? { topP: parseFloat(subResolved.topP) } : {})
+                    }
+                  };
+                }
+
+                const res = await fetch("/api/workflows/proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: targetUrl,
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: payload
+                  })
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error?.message || json.error || "Google Imagen API Error");
+
+                let generatedImageUrls: string[] = [];
+                
+                if (isImagen4) {
+                   if (!json.predictions || json.predictions.length === 0) {
+                      throw new Error('No images were generated by the model');
+                   }
+                   generatedImageUrls = json.predictions.map((p: any) => {
+                      if (p.bytesBase64Encoded) return `data:${p.mimeType || 'image/png'};base64,${p.bytesBase64Encoded}`;
+                      return "";
+                   }).filter(Boolean);
+                } else {
+                  if (!json.candidates?.[0]?.content?.parts || json.candidates[0].content.parts.length === 0) {
+                    throw new Error('No images were generated by the model');
+                  }
+                  generatedImageUrls = json.candidates[0].content.parts
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    .filter((p: any) => p.inlineData && p.inlineData.data)
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    .map((p: any) => `data:${p.inlineData?.mimeType || 'image/png'};base64,${p.inlineData?.data}`);
+                }
+                
+                if (generatedImageUrls.length === 0) {
+                  throw new Error("No valid image data was returned by the Google Imagen API.");
+                }
+                localNodeOutputs[subNode.id] = { imageUrl: generatedImageUrls[0], imageUrls: generatedImageUrls, aspectRatio: subResolved.aspectRatio || "1:1" };
+              } else if (subNode.data.type === "output") {
+                localNodeOutputs[subNode.id] = {
+                  result: `Iteration ${idx + 1} output`,
+                  item,
+                }
+              } else {
+                localNodeOutputs[subNode.id] = { result: `Iteration ${idx + 1} output` }
+              }
+
+              // Apply output mapping for subnode within loop iteration
+              if (localNodeOutputs[subNode.id] && subResolved.outputMapping && subResolved.outputMapping !== "[]") {
+                localNodeOutputs[subNode.id] = applyOutputMapping(localNodeOutputs[subNode.id], subResolved.outputMapping, localNodeOutputs, loopCtx)
+              }
+
+              // Stagger animation timing slightly in parallel to ensure UI remains highly responsive
+              await new Promise(resolve => setTimeout(resolve, 300 + (idx * 150)))
+              setNodes(prev => prev.map(n => n.id === subNode.id ? {
+                ...n,
+                data: { ...n.data, status: "success" as const }
+              } : n))
+              
+              markSubNodeSuccess(localNodeOutputs[subNode.id])
+            } catch (err: unknown) {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              localNodeOutputs[subNode.id] = { error: errMsg };
+              setNodes(prev => prev.map(n => n.id === subNode.id ? {
+                ...n,
+                data: { ...n.data, status: "error" as const }
+              } : n))
+              setLogs(prev => prev.map(log => log.id === logId ? {
+                ...log,
+                status: "error",
+                message: `${log.message}\n⚠️ Error: ${errMsg}`,
+                data: { error: errMsg }
+              } : log))
+              throw err; // propagate to loop node
+            }
           }
-          
-          await new Promise(resolve => setTimeout(resolve, 400))
-          loopResults.push({ index: idx, item, results: downstreamNodes.map(dn => nodeOutputs[dn.id]).filter(Boolean) })
+
+          await new Promise(resolve => setTimeout(resolve, 200))
+          loopResults.push({ index: idx, item, results: downstreamNodes.map(dn => localNodeOutputs[dn.id]).filter(Boolean) })
+        }
+
+        if (loopMode === "sequential") {
+          // Run iterations one after another (classic loop semantics)
+          for (let i = 0; i < arrData.length; i++) {
+            await runIteration(arrData[i], i)
+          }
+        } else {
+          // Run all iterations concurrently in parallel
+          await Promise.all(arrData.map((item, idx) => runIteration(item, idx)))
         }
         
+        // End visual feedback for group node
+        setNodes(prev => prev.map(n => n.type === "group" ? { ...n, data: { ...n.data, status: "idle" as const } } : n))
+
         nodeOutputs[node.id] = { iterations: loopResults.length, results: loopResults }
-        setLogs(prev => [...prev, { message: `[Loop complete] ${loopResults.length} iterations processed.`, data: nodeOutputs[node.id] }])
-      } else if (node.data.type === "slide-compose") {
-        nodeOutputs[node.id] = { 
-          slide: true, 
-          title: `(mock title from ${resolvedParams.titleField || "title"})`,
-          bullets: ["Mock bullet 1", "Mock bullet 2"],
-          imageUrl: "https://placehold.co/1024x768/png?text=Composed+Slide",
-          layout: resolvedParams.layout || "bottom-bar"
-        }
-        markNodeSuccess(nodeOutputs[node.id], `Compositing slide title "${resolvedParams.titleField || "title"}" and bullets...`)
+        
+        // Activate outgoing edges of any internal nodes that lead to external nodes (Bridging Connection Gap)
+        downstreamNodes.forEach(dn => {
+          allEdges
+            .filter(e => e.source === dn.id)
+            .forEach(e => activeEdgeIds.add(e.id))
+        })
+
+        setLogs(prev => [...prev, { message: `[Loop complete] All ${loopResults.length} iterations executed in ${loopMode.toUpperCase()} mode.`, data: nodeOutputs[node.id] }])
       } else if (node.data.type === "output") {
         // Collect all upstream outputs
         const upstreamIds = getUpstreamNodeIds(allEdges, node.id)
@@ -1340,18 +2580,47 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         markNodeSuccess(nodeOutputs[node.id], `Aggregated ${Object.keys(aggregated).length} upstream outputs under key "${resolvedParams.outputKey || "result"}"`)
       }
 
-      const delayMs = node.data.type === "delay" ? parseInt(resolvedParams.ms || "2000") : 1500
-      await new Promise(resolve => setTimeout(resolve, delayMs))
+        // Apply user-defined output mapping to reshape the node's output before it flows downstream
+        if (nodeOutputs[node.id] && resolvedParams.outputMapping && resolvedParams.outputMapping !== "[]") {
+          nodeOutputs[node.id] = applyOutputMapping(nodeOutputs[node.id], resolvedParams.outputMapping, nodeOutputs)
+        }
 
-      // success status
-      setNodes(prev => prev.map(n => n.id === node.id ? {
-        ...n,
-        data: { ...n.data, status: "success" as const }
-      } : n))
+        // If execution was successful and not a router/classifier brancher, activate ALL outgoing edges from this node
+        if (node.data.type !== "router" && node.data.type !== "classifier") {
+          allEdges.filter(e => e.source === node.id).forEach(e => activeEdgeIds.add(e.id))
+        }
+
+        const delayMs = node.data.type === "delay" ? parseInt(resolvedParams.ms || "2000") : 1500
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+
+        // success status
+        setNodes(prev => prev.map(n => n.id === node.id ? {
+          ...n,
+          data: { ...n.data, status: "success" as const }
+        } : n))
+      } catch (nodeErr: unknown) {
+        const errMsg = nodeErr instanceof Error ? nodeErr.message : String(nodeErr)
+        setNodes(prev => prev.map(n => n.id === node.id ? {
+          ...n,
+          data: { ...n.data, status: "error" as const }
+        } : n))
+        setLogs(prev => prev.map(log => log.id === logId ? {
+          ...log,
+          status: "error",
+          message: `${log.message}\n⚠️ Error: ${errMsg}`,
+          data: { error: errMsg }
+        } : log))
+        break // Stop executing the rest of the workflow on error!
+      }
     }
 
-    setIsExecuting(false)
-    setLogs(prev => [...prev, { message: `[Executor] All steps executed cleanly. 🎉` }])
+      setLogs(prev => [...prev, { message: `[Executor] All steps executed cleanly. 🎉` }])
+    } catch (err) {
+      console.error(err)
+      setLogs(prev => [...prev, { message: `[Executor] Workflow failed with internal error: ${err instanceof Error ? err.message : String(err)}`, status: "error" }])
+    } finally {
+      setIsExecuting(false)
+    }
   }
 
   return (
@@ -1388,11 +2657,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             <Button 
               size="sm" 
               onClick={handleRunClick} 
-              disabled={isRunning}
+              disabled={isRunning || nodes.length === 0}
               className="text-xs rounded-none gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold px-4 h-9"
             >
               <PlayCircleIcon className="size-4" />
-              Run Workflow
+              {isRunning ? "Running..." : "Run Workflow"}
             </Button>
             <ThemeToggle />
           </div>
@@ -1412,8 +2681,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 const colorMap: Record<string, string> = {
                   slate: "bg-slate-700", stone: "bg-stone-700", teal: "bg-teal-700",
                   rose: "bg-rose-700", sky: "bg-sky-700", red: "bg-red-700", amber: "bg-amber-700",
-                  emerald: "bg-emerald-700",
-                  indigo: "bg-indigo-700", purple: "bg-purple-700"
+                  emerald: "bg-emerald-700", indigo: "bg-indigo-700", purple: "bg-purple-700",
+                  violet: "bg-violet-700", pink: "bg-pink-700", cyan: "bg-cyan-700",
+                  fuchsia: "bg-fuchsia-700", lime: "bg-lime-700", orange: "bg-orange-700"
                 }
                 return (
                   <button
@@ -1477,11 +2747,15 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   if (type === "image-gen") return "#be123c"
                   if (type === "http-request") return "#0369a1"
                   if (type === "script") return "#b91c1c"
-                  if (type === "json-parse") return "#b45309"
                   if (type === "output") return "#047857"
                   if (type === "loop") return "#4338ca"
-                  if (type === "slide-compose") return "#7e22ce"
                   if (type === "llm") return "#6d28d9"
+                  if (type === "router") return "#be185d"
+                  if (type === "classifier") return "#d97706"
+                  if (type === "merge") return "#0e7490"
+                  if (type === "boolean") return "#a21caf"
+                  if (type === "transform") return "#4d7c0f"
+                  if (type === "filter") return "#c2410c"
                   return "#475569"
                 }}
                 className="!bg-card !border-border rounded-none"
@@ -1615,17 +2889,39 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     </div>
 
                     <div className="space-y-4 border border-border p-5 rounded-lg bg-card shadow-sm">
-                      {expectedInputs.map(key => (
-                        <div key={key} className="space-y-1.5">
-                          <Label className="text-xs font-bold text-foreground uppercase tracking-wider">{key}</Label>
-                          <Input 
-                            value={runInputData[key] || ""}
-                            onChange={(e) => setRunInputData(prev => ({...prev, [key]: e.target.value}))}
-                            className="text-sm h-10 rounded-md font-mono"
-                            placeholder={`Enter ${key}...`}
-                          />
-                        </div>
-                      ))}
+                      {expectedInputs.map(key => {
+                        if (key === "_file_") {
+                          return (
+                            <div key={key} className="space-y-1.5">
+                              <Label className="text-xs font-bold text-foreground uppercase tracking-wider">File Upload</Label>
+                              <Input 
+                                type="file"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) {
+                                    const reader = new FileReader()
+                                    reader.onload = () => setRunInputData(prev => ({...prev, [key]: reader.result as string}))
+                                    reader.readAsDataURL(file)
+                                  }
+                                }}
+                                className="text-xs h-10 rounded-md cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                              />
+                              {runInputData[key] && <p className="text-[10px] text-emerald-500 font-mono truncate mt-1">File loaded ({Math.round(runInputData[key].length / 1024)} KB)</p>}
+                            </div>
+                          )
+                        }
+                        return (
+                          <div key={key} className="space-y-1.5">
+                            <Label className="text-xs font-bold text-foreground uppercase tracking-wider">{key}</Label>
+                            <Input 
+                              value={runInputData[key] || ""}
+                              onChange={(e) => setRunInputData(prev => ({...prev, [key]: e.target.value}))}
+                              className="text-sm h-10 rounded-md font-mono"
+                              placeholder={`Enter ${key}...`}
+                            />
+                          </div>
+                        )
+                      })}
                       <Button 
                         onClick={() => simulateExecution(runInputData)} 
                         className="w-full mt-2 gap-2 h-10 font-bold"
@@ -1670,12 +2966,31 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                               </div>
                             </div>
                             
-                            <div className="pl-8 space-y-2">
+                             <div className="pl-8 space-y-2">
                               <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">{log.message}</p>
                               {log.data && (
-                                <div className="bg-muted/30 border border-border p-3 rounded-md overflow-x-auto text-[10px] font-mono text-foreground mt-1 shadow-sm relative group">
-                                  <div className="absolute top-2 right-2 text-[9px] uppercase tracking-wider text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">Payload</div>
-                                  <pre>{JSON.stringify(log.data, null, 2)}</pre>
+                                <div className="space-y-2">
+                                  {/* Render Image if log data has an image link */}
+                                  {(log.data.imageUrl || log.data.image || (typeof log.data === 'object' && Object.values(log.data).some(v => typeof v === 'string' && (v.startsWith('data:image/') || v.startsWith('http')) && (v.includes('.png') || v.includes('.jpg') || v.includes('.jpeg') || v.includes('placehold.co') || v.startsWith('data:image/'))))) && (
+                                    (() => {
+                                      const imgUrl = log.data.imageUrl || log.data.image || Object.values(log.data).find(v => typeof v === 'string' && (v.startsWith('data:image/') || v.startsWith('http')));
+                                      return (
+                                        <div className="border border-border p-2 bg-card rounded-md max-w-[200px] shadow-sm animate-in fade-in zoom-in-95 duration-200 group relative overflow-hidden">
+                                          <img 
+                                            src={imgUrl} 
+                                            alt="Generated Output" 
+                                            className="rounded object-cover w-full h-auto cursor-zoom-in hover:opacity-90 transition-opacity"
+                                            onClick={() => setMaximizedImage(imgUrl)}
+                                            title="Click to maximize & download"
+                                          />
+                                        </div>
+                                      );
+                                    })()
+                                  )}
+                                  <div className="bg-muted/30 border border-border p-3 rounded-md overflow-x-auto text-[10px] font-mono text-foreground mt-1 shadow-sm relative group">
+                                    <div className="absolute top-2 right-2 text-[9px] uppercase tracking-wider text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">Payload</div>
+                                    <pre>{JSON.stringify(log.data, null, 2)}</pre>
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -1706,11 +3021,59 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               </div>
 
               {selectedNode && (
-                <div className="relative flex-1 min-h-0 overflow-hidden">
-                  <div className="absolute inset-0 overflow-y-auto p-6 space-y-5">
+                <div className="relative flex-1 min-h-0 flex flex-col">
+                  {/* Upstream Variables Panel */}
+                  <div className="shrink-0 p-4 border-b bg-muted/20">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Available Upstream Variables</Label>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                      {getUpstreamNodeIds(edges, selectedNode.id).map(uid => {
+                        const node = nodes.find(n => n.id === uid);
+                        if (!node) return null;
+                        const dragText = `{{ $node["${uid}"].json }}`;
+                        return (
+                          <div 
+                            key={uid}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", dragText);
+                              e.dataTransfer.effectAllowed = "copy";
+                            }}
+                            onClick={() => {
+                              // Optional click-to-copy
+                              navigator.clipboard.writeText(dragText);
+                            }}
+                            className="text-[10px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded shadow-sm flex items-center gap-1.5"
+                            title="Drag into an input field or click to copy"
+                          >
+                            <RepeatIcon className="size-3" />
+                            <span className="font-mono font-bold truncate max-w-[120px]">{node.data.label}</span>
+                          </div>
+                        )
+                      })}
+                      {getUpstreamNodeIds(edges, selectedNode.id).length === 0 && (
+                        <span className="text-[10px] text-muted-foreground italic">No upstream nodes connected.</span>
+                      )}
+                      {selectedNode.data.type !== "trigger" && (
+                        <div 
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/plain", `{{ $json.field }}`);
+                            e.dataTransfer.effectAllowed = "copy";
+                          }}
+                          className="text-[10px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-1 rounded shadow-sm flex items-center gap-1.5"
+                          title="Drag into an input field to map current item"
+                        >
+                          <BracesIcon className="size-3" />
+                          <span className="font-mono font-bold">Current Item Data</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-6 space-y-5">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Block Title</Label>
-                    <Input 
+                    <DroppableInput 
                       value={selectedNode.data.label}
                       onChange={(e) => updateNodeData({ label: e.target.value })}
                       className="rounded-none text-xs h-9 font-semibold"
@@ -1732,7 +3095,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Trigger Event Name</Label>
-                      <Input 
+                      <DroppableInput 
                         value={selectedNode.data.params.eventName || selectedNode.data.params.event || ""}
                         onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, eventName: e.target.value } })}
                         className="rounded-none text-xs h-9"
@@ -1742,7 +3105,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Webhook URL (auto-generated on save)</Label>
-                      <Input 
+                      <DroppableInput 
                         value={selectedNode.data.params.webhookUrl || ""}
                         onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, webhookUrl: e.target.value } })}
                         className="rounded-none text-xs h-9 font-mono"
@@ -1765,20 +3128,12 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                       </select>
                       <p className="text-[10px] text-muted-foreground/60">The MIME type of the data the webhook expects to receive.</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Expected Payload Schema (JSON Schema, optional)</Label>
-                      <Textarea 
-                        value={selectedNode.data.params.inputSchema || "{}"}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, inputSchema: e.target.value } })}
-                        className="rounded-none text-xs min-h-[120px] font-mono resize-none"
-                        placeholder='{"type":"object","properties":{"orderId":{"type":"string"},"total":{"type":"number"}}}'
-                      />
-                      <p className="text-[10px] text-muted-foreground/60">Define the expected shape of the incoming payload. Used for validation and AI context.</p>
-                    </div>
+                    <SchemaBuilderSection key={selectedNode.id} selectedNode={selectedNode} updateNodeData={updateNodeData} />
+                    <p className="text-[10px] text-muted-foreground/60">Define the expected shape of the incoming payload. Used for validation and AI context.</p>
                     {/* File Uploader — shown when payload type supports files */}
                     {(selectedNode.data.params.contentType === "multipart/form-data" || selectedNode.data.params.contentType === "image/png") && (
                       <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sample / Expected File</Label>
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sample / Expected File (e.g., Reference Image)</Label>
                         <Input 
                           type="file"
                           accept={selectedNode.data.params.contentType === "image/png" ? "image/png,image/jpeg,image/webp,image/gif" : "*/*"}
@@ -1830,8 +3185,31 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 {selectedNode.data.type === "image-gen" && (
                   <>
                     <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Model ID</Label>
+                      <select 
+                        value={selectedNode.data.params.model || "gemini-3.1-flash-image"}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, model: e.target.value } })}
+                        className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                      >
+                        <option value="gemini-3.1-flash-image">Gemini 3.1 Flash Image</option>
+                        <option value="gemini-3-pro-image">Gemini 3 Pro Image</option>
+                        <option value="imagen-4.0-generate-001">Imagen 4.0</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Custom API Key</Label>
+                      <Input 
+                        type="password"
+                        value={selectedNode.data.params.apiKey || ""}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, apiKey: e.target.value } })}
+                        className="rounded-none text-xs h-9 font-mono"
+                        placeholder="AIzaSy..."
+                      />
+                      <p className="text-[10px] text-muted-foreground/60">Your private Google API key.</p>
+                    </div>
+                    <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Image Generation Prompt</Label>
-                      <Textarea 
+                      <DroppableTextarea 
                         value={selectedNode.data.params.prompt || ""}
                         onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, prompt: e.target.value } })}
                         className="rounded-none text-xs min-h-[100px] resize-none"
@@ -1893,23 +3271,79 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Style Reference Image (optional)</Label>
-                      <Input 
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            const reader = new FileReader()
-                            reader.onload = () => {
-                              updateNodeData({ params: { ...selectedNode.data.params, referenceImage: reader.result as string } })
-                            }
-                            reader.readAsDataURL(file)
-                          }
-                        }}
-                        className="rounded-none text-xs h-9 cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-none file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                      <div className="flex justify-between items-center">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Creativity Level (Temperature)</Label>
+                        <span className="text-[10px] text-muted-foreground">
+                          {selectedNode.data.params.temperature || "1.0"}
+                        </span>
+                      </div>
+                      <input 
+                        type="range"
+                        step="0.1"
+                        min="0"
+                        max="2"
+                        value={selectedNode.data.params.temperature || "1.0"}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, temperature: e.target.value } })}
+                        className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
                       />
-                      {selectedNode.data.params.referenceImage && (
+                      <div className="flex justify-between text-[9px] text-muted-foreground/60 uppercase">
+                        <span>Precise</span>
+                        <span>Balanced</span>
+                        <span>Wild</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2 pt-2">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Variety (Top-P)</Label>
+                        <span className="text-[10px] text-muted-foreground">
+                          {selectedNode.data.params.topP || "0.95"}
+                        </span>
+                      </div>
+                      <input 
+                        type="range"
+                        step="0.05"
+                        min="0"
+                        max="1"
+                        value={selectedNode.data.params.topP || "0.95"}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, topP: e.target.value } })}
+                        className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                      <div className="flex justify-between text-[9px] text-muted-foreground/60 uppercase">
+                        <span>Focused</span>
+                        <span>Diverse</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Style Reference Image (optional)</Label>
+                      <div className="flex gap-2">
+                        <DroppableInput 
+                          value={selectedNode.data.params.referenceImage || ""}
+                          onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, referenceImage: e.target.value } })}
+                          className="rounded-none text-xs h-9 flex-1"
+                          placeholder="{{ $node['trigger-1'].json.file }} or Base64..."
+                        />
+                        <div className="relative">
+                          <Button type="button" variant="outline" className="rounded-none h-9 text-xs px-3">
+                            Upload File
+                          </Button>
+                          <Input 
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                const reader = new FileReader()
+                                reader.onload = () => {
+                                  updateNodeData({ params: { ...selectedNode.data.params, referenceImage: reader.result as string } })
+                                }
+                                reader.readAsDataURL(file)
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {selectedNode.data.params.referenceImage && selectedNode.data.params.referenceImage.startsWith("data:image") && (
                         <div className="flex items-center gap-2 mt-1">
                           <img src={selectedNode.data.params.referenceImage} alt="Reference" className="size-12 object-cover rounded border border-border" />
                           <span className="text-[10px] text-emerald-600 font-mono truncate flex-1">✓ Ref loaded ({Math.round(selectedNode.data.params.referenceImage.length / 1024)} KB)</span>
@@ -1922,7 +3356,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                           </button>
                         </div>
                       )}
-                      <p className="text-[10px] text-muted-foreground/60">Upload a reference image to guide the visual style of generated images.</p>
+                      <p className="text-[10px] text-muted-foreground/60">Provide a base64 string, variable, or upload a file to guide the visual style.</p>
                     </div>
                   </>
                 )}
@@ -1964,19 +3398,6 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   </>
                 )}
 
-                {/* JSON Parse Fields */}
-                {selectedNode.data.type === "json-parse" && (
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">JSONPath Expression</Label>
-                    <Input 
-                      value={selectedNode.data.params.expression || ""}
-                      onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, expression: e.target.value } })}
-                      className="rounded-none text-xs h-9"
-                      placeholder="$.data.invoice.total"
-                    />
-                  </div>
-                )}
-
                 {/* Custom Javascript */}
                 {selectedNode.data.type === "script" && (
                   <div className="space-y-2">
@@ -1996,12 +3417,25 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     <div className="p-3 border border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-700 space-y-1">
                       <div className="flex items-center gap-1.5">
                         <RepeatIcon className="size-3 text-indigo-600" />
-                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Iterator Node</span>
+                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Iterator / Loop Node</span>
                       </div>
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        The Loop node iterates over an array from incoming data. Each item is passed to connected
-                        downstream nodes as <code className="text-foreground">{"{{item}}"}</code>. The loop runs until all items are processed.
+                        The Iterator node iterates over an array from incoming data. Each item is passed to connected
+                        downstream nodes using the item variable name you define below. Choose <strong>parallel</strong> mode
+                        to run all iterations concurrently, or <strong>sequential</strong> (loop) mode to process items one after another.
                       </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Execution Mode</Label>
+                      <select
+                        value={selectedNode.data.params.mode || "parallel"}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, mode: e.target.value } })}
+                        className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                      >
+                        <option value="parallel">Parallel — run all iterations concurrently</option>
+                        <option value="sequential">Sequential — loop through items one by one</option>
+                      </select>
+                      <p className="text-[10px] text-muted-foreground/60">Parallel is faster for independent items; sequential preserves order and is gentler on rate limits.</p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Array JSONPath</Label>
@@ -2021,69 +3455,128 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                         className="rounded-none text-xs h-9"
                         placeholder="slide"
                       />
-                      <p className="text-[10px] text-muted-foreground/60">The variable name used in downstream <code className="text-foreground">{"{{item}}"}</code> placeholders.</p>
+                      <p className="text-[10px] text-muted-foreground/60">Downstream nodes can reference the current item via <code className="text-foreground">{"{{<itemName>}}"}</code> (e.g. <code className="text-foreground">{"{{slideTitle}}"}</code>).</p>
                     </div>
                   </>
                 )}
 
-                {/* Slide Compose Fields */}
-                {selectedNode.data.type === "slide-compose" && (
+                {/* Router Fields */}
+                {selectedNode.data.type === "router" && (
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Condition (JavaScript/Expression)</Label>
+                    <Input 
+                      value={selectedNode.data.params.condition || ""}
+                      onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, condition: e.target.value } })}
+                      className="rounded-none text-xs h-9 font-mono"
+                      placeholder="{{$json.value}} > 5"
+                    />
+                    <p className="text-[10px] text-muted-foreground/60">Evaluates to true or false. Edges can be connected to the true/false handles.</p>
+                  </div>
+                )}
+
+                {/* Classifier Fields */}
+                {selectedNode.data.type === "classifier" && (
                   <>
-                    <div className="p-3 border border-purple-300 bg-purple-50 dark:bg-purple-900/30 dark:border-purple-700 space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        <LayersIcon className="size-3 text-purple-600" />
-                        <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Slide Composer</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        The Slide Compose node overlays text content onto a generated image to produce a final composed slide.
-                        It takes a title, bullet points, and a background image, then renders them together.
-                      </p>
-                    </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Title Field</Label>
-                      <Input 
-                        value={selectedNode.data.params.titleField || ""}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, titleField: e.target.value } })}
-                        className="rounded-none text-xs h-9"
-                        placeholder="title"
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Incoming Value to Match</Label>
+                      <DroppableInput 
+                        value={selectedNode.data.params.valueToMatch || ""}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, valueToMatch: e.target.value } })}
+                        className="rounded-none text-xs h-9 font-mono"
+                        placeholder="e.g. {{$json.status}} or {{$node['node-1'].json.emittedValue}}"
                       />
-                      <p className="text-[10px] text-muted-foreground/60">The field name containing the slide title text.</p>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Bullets Field</Label>
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Match Cases / Possibilities (Comma-separated)</Label>
                       <Input 
-                        value={selectedNode.data.params.bulletsField || ""}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, bulletsField: e.target.value } })}
-                        className="rounded-none text-xs h-9"
-                        placeholder="bullets"
+                        value={selectedNode.data.params.possibilities || ""}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, possibilities: e.target.value } })}
+                        className="rounded-none text-xs h-9 font-mono"
+                        placeholder="new, assigned, resolved"
                       />
-                      <p className="text-[10px] text-muted-foreground/60">The field name containing the array of bullet points.</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Image Field</Label>
-                      <Input 
-                        value={selectedNode.data.params.imageField || ""}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, imageField: e.target.value } })}
-                        className="rounded-none text-xs h-9"
-                        placeholder="imageUrl"
-                      />
-                      <p className="text-[10px] text-muted-foreground/60">The field name containing the background image URL.</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Text Layout</Label>
-                      <select 
-                        value={selectedNode.data.params.layout || "bottom-bar"}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, layout: e.target.value } })}
-                        className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-                      >
-                        <option value="bottom-bar">Bottom Bar (title + bullets at bottom)</option>
-                        <option value="overlay">Overlay (text centered on image)</option>
-                        <option value="split">Split (text left, image right)</option>
-                        <option value="title-only">Title Only (large title, no bullets)</option>
-                      </select>
-                      <p className="text-[10px] text-muted-foreground/60">How text is positioned over the background image.</p>
+                      <p className="text-[10px] text-muted-foreground/60">Define custom routing labels. A corresponding output handle will appear for each matching case.</p>
                     </div>
                   </>
+                )}
+
+                {/* Merge Fields */}
+                {selectedNode.data.type === "merge" && (
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Merge Strategy</Label>
+                    <select 
+                      value={selectedNode.data.params.strategy || "wait-all"}
+                      onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, strategy: e.target.value } })}
+                      className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                    >
+                      <option value="wait-all">Wait for all branches</option>
+                      <option value="first-wins">Pass through first arriving branch</option>
+                      <option value="append">Append as array</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Boolean Fields */}
+                {selectedNode.data.type === "boolean" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Operator</Label>
+                      <select 
+                        value={selectedNode.data.params.operator || "AND"}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, operator: e.target.value } })}
+                        className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                      >
+                        <option value="AND">AND</option>
+                        <option value="OR">OR</option>
+                        <option value="NOT">NOT</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Operand 1</Label>
+                      <Input 
+                        value={selectedNode.data.params.operand1 || ""}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, operand1: e.target.value } })}
+                        className="rounded-none text-xs h-9 font-mono"
+                        placeholder="true"
+                      />
+                    </div>
+                    {selectedNode.data.params.operator !== "NOT" && (
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Operand 2</Label>
+                        <Input 
+                          value={selectedNode.data.params.operand2 || ""}
+                          onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, operand2: e.target.value } })}
+                          className="rounded-none text-xs h-9 font-mono"
+                          placeholder="false"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Transform Fields */}
+                {selectedNode.data.type === "transform" && (
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">JSON Mapping Template</Label>
+                    <Textarea 
+                      value={selectedNode.data.params.mapping || "{}"}
+                      onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, mapping: e.target.value } })}
+                      className="rounded-none text-xs min-h-[150px] font-mono resize-none"
+                      placeholder='{ "newKey": "{{$json.oldKey}}" }'
+                    />
+                  </div>
+                )}
+
+                {/* Filter Fields */}
+                {selectedNode.data.type === "filter" && (
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Keep condition</Label>
+                    <Input 
+                      value={selectedNode.data.params.condition || ""}
+                      onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, condition: e.target.value } })}
+                      className="rounded-none text-xs h-9 font-mono"
+                      placeholder="{{$json.status}} === 'active'"
+                    />
+                  </div>
                 )}
 
                 {/* LLM Node Fields */}
@@ -2102,7 +3595,17 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">AI Provider</Label>
                       <select 
                         value={selectedNode.data.params.provider || "openai"}
-                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, provider: e.target.value } })}
+                        onChange={(e) => {
+                          const newProvider = e.target.value;
+                          let newModel = "";
+                          if (newProvider === "openai") newModel = "gpt-4o-mini";
+                          else if (newProvider === "anthropic") newModel = "claude-3-5-sonnet-20241022";
+                          else if (newProvider === "google") newModel = "gemini-2.5-flash";
+                          else if (newProvider === "groq") newModel = "llama-3.3-70b-versatile";
+                          else if (newProvider === "open-source") newModel = "meta-llama/llama-3.1-405b-instruct";
+                          
+                          updateNodeData({ params: { ...selectedNode.data.params, provider: newProvider, model: newModel } });
+                        }}
                         className="flex h-9 w-full items-center justify-between border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
                       >
                         <option value="openai">OpenAI</option>
@@ -2243,6 +3746,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                       <p className="text-[10px] text-muted-foreground/60">The serialization format for the workflow payload.</p>
                     </div>
                   </>
+                )}
+
+                {/* Output Mapping Section — available for all non-group node types */}
+                {selectedNode.data.type !== "group" && (
+                  <OutputMappingSection key={selectedNode.id} selectedNode={selectedNode} updateNodeData={updateNodeData} />
                 )}
                   </div>
                 </div>
@@ -2428,6 +3936,43 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           )}
         </div>
       </SidebarInset>
+
+      {/* Full Screen Image Lightbox Modal */}
+      {maximizedImage && (
+        <div 
+          className="fixed inset-0 bg-black/85 z-[9999] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setMaximizedImage(null)}
+        >
+          <div 
+            className="relative max-w-[90vw] max-h-[85vh] bg-card border border-border p-2 shadow-2xl flex flex-col gap-2 rounded-lg overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <img src={maximizedImage} alt="Maximized" className="object-contain max-w-full max-h-[72vh] rounded shadow-inner" />
+            <div className="flex gap-2 justify-end px-1.5 pb-1 border-t border-border pt-3">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const a = document.createElement('a');
+                  a.href = maximizedImage;
+                  a.download = 'generated-workflow-image.png';
+                  a.click();
+                }}
+                className="text-xs h-9 px-4 gap-1.5 font-bold"
+              >
+                Download Image
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setMaximizedImage(null)}
+                className="text-xs h-9 px-4 font-bold"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </SidebarProvider>
   )
 }
