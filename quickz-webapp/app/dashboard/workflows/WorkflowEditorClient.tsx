@@ -85,7 +85,9 @@ import {
   ToggleLeftIcon,
   FilterIcon,
   Wand2Icon,
-  SearchIcon
+  SearchIcon,
+  CopyIcon,
+  CheckIcon
 } from "lucide-react"
 
 // Dynamic nodes typing & parameters
@@ -790,6 +792,112 @@ const ThoughtBlock = ({ thought }: { thought: string }) => {
         </div>
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+const CopyButton = ({ text }: { text: string }) => {
+  const [copied, setCopied] = React.useState(false)
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }}
+      className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+      title="Copy JSON"
+    >
+      {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
+    </button>
+  )
+}
+
+const DataRenderer = ({ data, setMaximizedImage }: { data: any, setMaximizedImage: any }) => {
+  const [view, setView] = React.useState<"rich" | "raw">("rich")
+  
+  // Try to determine if it can be rich rendered
+  let hasRichContent = false;
+  let textContents: {key: string, text: string}[] = [];
+  
+  if (data && typeof data === 'object') {
+     Object.entries(data).forEach(([k, v]) => {
+        if (typeof v === 'string' && v.length > 20 && !v.startsWith('data:image') && !v.startsWith('http')) {
+           hasRichContent = true;
+           textContents.push({key: k, text: v});
+        }
+     });
+     // Also check for arrays of objects (like loop results)
+     if (data.results && Array.isArray(data.results)) {
+        hasRichContent = true;
+     }
+  }
+
+  // Handle images
+  const imgUrl = data.imageUrl || data.image || (typeof data === 'object' && Object.values(data).find(v => typeof v === 'string' && (v.startsWith('data:image/') || v.match(/^https?:\/\/.*\.(png|jpg|jpeg|gif|webp)$/i))));
+
+  return (
+    <div className="space-y-2 w-full">
+      {/* Tab Selector */}
+      <div className="flex items-center gap-1 border-b border-border pb-1">
+        {hasRichContent && (
+          <button 
+            onClick={() => setView("rich")}
+            className={`text-[10px] px-2 py-1 rounded-t-md font-bold uppercase tracking-wider transition-colors ${view === "rich" ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Pretty View
+          </button>
+        )}
+        <button 
+          onClick={() => setView("raw")}
+          className={`text-[10px] px-2 py-1 rounded-t-md font-bold uppercase tracking-wider transition-colors ${view === "raw" || !hasRichContent ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          Raw JSON
+        </button>
+      </div>
+
+      {imgUrl && (
+        <div className="border border-border p-2 bg-card rounded-md max-w-[200px] shadow-sm animate-in fade-in zoom-in-95 duration-200 group relative overflow-hidden">
+          <img 
+            src={imgUrl} 
+            alt="Generated Output" 
+            className="rounded object-cover w-full h-auto cursor-zoom-in hover:opacity-90 transition-opacity"
+            onClick={() => setMaximizedImage(imgUrl)}
+            title="Click to maximize & download"
+          />
+        </div>
+      )}
+
+      {view === "rich" && hasRichContent && (
+        <div className="bg-card border border-border p-3 rounded-md shadow-sm space-y-3">
+           {textContents.map((tc, idx) => (
+             <div key={idx} className="space-y-1">
+                <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">{tc.key}</div>
+                <div className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{tc.text}</div>
+             </div>
+           ))}
+           {data.results && Array.isArray(data.results) && (
+              <div className="space-y-3">
+                 {data.results.map((res: any, idx: number) => (
+                    <div key={idx} className="p-2 border border-border/50 rounded bg-muted/10">
+                       <div className="text-[10px] font-bold text-primary mb-1">Iteration {res.index !== undefined ? res.index + 1 : idx + 1}</div>
+                       <DataRenderer data={res.results || res} setMaximizedImage={setMaximizedImage} />
+                    </div>
+                 ))}
+              </div>
+           )}
+        </div>
+      )}
+
+      {(view === "raw" || !hasRichContent) && (
+        <div className="bg-muted/30 border border-border p-3 rounded-md overflow-x-auto shadow-sm relative group">
+          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-[9px] uppercase tracking-wider text-muted-foreground mr-1">Payload</span>
+            <CopyButton text={JSON.stringify(data, null, 2)} />
+          </div>
+          <JsonViewer data={data} />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -2729,16 +2837,31 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         
         // Simple JSONPath extraction (supports $.field or $.field.subfield)
         const arrayPath = resolvedParams.arrayPath || "$.slides"
-        const pathParts = arrayPath.replace(/^\$\./, "").split(".")
         let arrData: unknown[] = [1, 2, 3] as unknown[] // default mock array
-        if (upstreamOutput && typeof upstreamOutput === "object") {
-          let current: unknown = upstreamOutput
-          for (const part of pathParts) {
-            if (current && typeof current === "object") {
-              current = (current as Record<string, unknown>)[part]
+        
+        // Check if arrayPath is itself a number (e.g. it was resolved from a template like {{$node["1"].json.n}})
+        if (!isNaN(Number(arrayPath)) && Number(arrayPath) > 0 && arrayPath.trim() !== "") {
+            arrData = Array.from({ length: Math.floor(Number(arrayPath)) }, (_, i) => i + 1)
+        } else {
+            // Otherwise treat it as a JSONPath
+            const pathParts = arrayPath.replace(/^\$\./, "").split(".")
+            if (upstreamOutput && typeof upstreamOutput === "object") {
+              let current: unknown = upstreamOutput
+              for (const part of pathParts) {
+                if (current && typeof current === "object") {
+                  current = (current as Record<string, unknown>)[part]
+                } else {
+                  current = undefined
+                }
+              }
+              if (Array.isArray(current)) {
+                arrData = current
+              } else if (typeof current === "number" && !isNaN(current) && current > 0) {
+                arrData = Array.from({ length: Math.floor(current) }, (_, i) => i + 1)
+              } else if (typeof current === "string" && !isNaN(Number(current)) && Number(current) > 0) {
+                arrData = Array.from({ length: Math.floor(Number(current)) }, (_, i) => i + 1)
+              }
             }
-          }
-          if (Array.isArray(current)) arrData = current
         }
         
         const itemName = resolvedParams.itemName || "slide"
@@ -3480,29 +3603,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                              <div className="pl-8 space-y-2">
                               <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">{log.message}</p>
                               {log.data && (
-                                <div className="space-y-2">
-                                  {/* Render Image if log data has an image link */}
-                                  {(log.data.imageUrl || log.data.image || (typeof log.data === 'object' && Object.values(log.data).some(v => typeof v === 'string' && (v.startsWith('data:image/') || v.startsWith('http')) && (v.includes('.png') || v.includes('.jpg') || v.includes('.jpeg') || v.includes('placehold.co') || v.startsWith('data:image/'))))) && (
-                                    (() => {
-                                      const imgUrl = log.data.imageUrl || log.data.image || Object.values(log.data).find(v => typeof v === 'string' && (v.startsWith('data:image/') || v.startsWith('http')));
-                                      return (
-                                        <div className="border border-border p-2 bg-card rounded-md max-w-[200px] shadow-sm animate-in fade-in zoom-in-95 duration-200 group relative overflow-hidden">
-                                          <img 
-                                            src={imgUrl} 
-                                            alt="Generated Output" 
-                                            className="rounded object-cover w-full h-auto cursor-zoom-in hover:opacity-90 transition-opacity"
-                                            onClick={() => setMaximizedImage(imgUrl)}
-                                            title="Click to maximize & download"
-                                          />
-                                        </div>
-                                      );
-                                    })()
-                                  )}
-                                  <div className="bg-muted/30 border border-border p-3 rounded-md overflow-x-auto mt-1 shadow-sm relative group">
-                                    <div className="absolute top-2 right-2 text-[9px] uppercase tracking-wider text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">Payload</div>
-                                    <JsonViewer data={log.data} />
-                                  </div>
-                                </div>
+                                <DataRenderer data={log.data} setMaximizedImage={setMaximizedImage} />
                               )}
                             </div>
                           </div>
