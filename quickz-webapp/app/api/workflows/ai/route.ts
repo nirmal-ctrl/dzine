@@ -33,6 +33,8 @@ export async function POST(req: Request) {
 | boolean | Logical operations | operator (AND/OR/NOT), operand1, operand2 (optional) |
 | transform | Map and restructure data | mapping (JSON string template) |
 | filter | Filter items from an array | condition (JS expression string) |
+| classifier | Route dynamically based on matching incoming values to custom possibilities | valueToMatch (string with {{placeholder}}), possibilities (comma separated string, e.g. 'new, assigned, resolved') |
+| group | Visual encapsulation container (no logical function) | N/A |
 
 ## Output Mapping (optional on every node)
 
@@ -101,7 +103,7 @@ Respond ONLY with a raw JSON object: no markdown, no explanation, no code fences
       "position": { "x": number, "y": number },
       "data": {
         "label": "Human readable label",
-        "type": "trigger | llm | image-gen | http-request | script | delay | output | loop | router | merge | boolean | transform | filter",
+        "type": "trigger | llm | image-gen | http-request | script | delay | output | loop | router | merge | boolean | transform | filter | classifier | group",
         "params": { ...relevant config keys for this type... }
       }
     }
@@ -111,7 +113,7 @@ Respond ONLY with a raw JSON object: no markdown, no explanation, no code fences
       "id": "edge-unique_id",
       "source": "nodeId",
       "target": "nodeId",
-      "sourceHandle": "true" // Optional, required for 'router' node source handles ("true" or "false")
+      "sourceHandle": "true" // Optional, required for 'router' node ("true" or "false") and 'classifier' node (match the possibility string)
     }
   ]
 }

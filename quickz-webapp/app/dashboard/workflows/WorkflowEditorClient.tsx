@@ -12,7 +12,7 @@ import ReactFlow, {
   Connection,
   Edge,
   MarkerType,
-  Node,
+  type Node,
   Handle,
   Position,
 } from "reactflow"
@@ -76,7 +76,8 @@ import {
   GitMergeIcon,
   ToggleLeftIcon,
   FilterIcon,
-  Wand2Icon
+  Wand2Icon,
+  SearchIcon
 } from "lucide-react"
 
 // Dynamic nodes typing & parameters
@@ -349,47 +350,410 @@ const nodeTypes = {
   group: GroupWorkflowNode
 }
 
-// Droppable Fields for Variable Drag & Drop
-const DroppableInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => {
-  const handleDrop = (e: React.DragEvent<HTMLInputElement>) => {
+// Context to share nodes globally for autocomplete
+const WorkflowNodesContext = React.createContext<Node<NodeData>[]>([])
+
+// Helper to statically extract fields from a node
+function getStaticNodeFields(nodeId: string, allNodes: Node<NodeData>[]): { name: string; type: string; description?: string }[] {
+  const node = allNodes.find(n => n.id === nodeId)
+  if (!node) return []
+
+  const mappingStr = node.data.params.outputMapping || "[]"
+  try {
+    const mappedFields = JSON.parse(mappingStr)
+    if (Array.isArray(mappedFields) && mappedFields.length > 0) {
+      return mappedFields.map((f: any) => ({ name: f.key, type: "mapped" }))
+    }
+  } catch {}
+
+  if (node.data.type === "trigger") {
+    let fields: { name: string; type: string; description?: string }[] = []
+    const schemaStr = node.data.params.inputSchema || "{}"
+    try {
+      const parsed = JSON.parse(schemaStr)
+      if (parsed?.properties) {
+        fields = Object.entries(parsed.properties).map(([name, prop]: [string, any]) => ({
+          name, type: prop?.type || "any", description: prop?.description
+        }))
+      }
+    } catch {}
+    
+    if (node.data.params.contentType === "multipart/form-data" || node.data.params.contentType === "image/png") {
+      fields.push({ name: "file", type: "string", description: "Uploaded file base64 data" })
+    }
+    
+    if (fields.length > 0) return fields;
+  }
+  if (node.data.type === "image-gen") return [{ name: "imageUrl", type: "string" }, { name: "imageUrls", type: "array" }, { name: "aspectRatio", type: "string" }]
+  if (node.data.type === "http-request") return [{ name: "status", type: "number" }, { name: "data", type: "object" }]
+  if (node.data.type === "llm") {
+    if (node.data.params.responseFormat === "json_object" && node.data.params.jsonSchema) {
+      try {
+        const parsed = JSON.parse(node.data.params.jsonSchema)
+        if (parsed?.properties) {
+          return Object.entries(parsed.properties).map(([name, prop]: [string, any]) => ({
+            name, type: prop?.type || "any", description: prop?.description
+          }))
+        }
+      } catch {}
+    }
+    return [{ name: "text", type: "string" }]
+  }
+  if (node.data.type === "router") return [{ name: "branch", type: "string" }, { name: "evaluated", type: "boolean" }]
+  if (node.data.type === "classifier") return [{ name: "chosenMatch", type: "string" }, { name: "value", type: "string" }]
+
+  return []
+}
+
+// ─── Rich ContentEditable Editor for True Visual Chips ───────────────────────
+
+function parseValueToHtml(val: string, nodes: Node<NodeData>[]) {
+  if (!val) return "";
+  let escaped = val.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
+  escaped = escaped.replace(/\n/g, "<br>");
+  
+  return escaped.replace(/\{\{\s*(.*?)\s*\}\}/g, (match, inner) => {
+     let label = inner;
+     const nodeMatch = inner.match(/\$node\["([^"]+)"\]\.json\.?(.*)/);
+     if (nodeMatch) {
+        const nodeId = nodeMatch[1];
+        const field = nodeMatch[2];
+        const node = nodes.find(n => n.id === nodeId);
+        label = node ? `${node.data.label}${field ? ` → ${field}` : ''}` : inner;
+     } else if (inner.startsWith("$json.")) {
+        label = `Trigger → ${inner.substring(6)}`;
+     } else if (inner === "$json") {
+        label = `Trigger Output`;
+     }
+     
+     // The zero-width spaces (&#8203;) allow the cursor to snap cleanly around the uneditable block in standard contentEditable
+     return `&#8203;<span class="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-bold bg-primary text-primary-foreground shadow-sm select-none align-middle" contenteditable="false" data-raw="${encodeURIComponent(match)}">${label}</span>&#8203;`;
+  });
+}
+
+function parseHtmlToValue(html: string) {
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  
+  let val = "";
+  function walk(node: ChildNode) {
+    if (node.nodeType === globalThis.Node.TEXT_NODE) {
+      // Remove zero-width spaces used for cursor placement
+      val += (node.textContent || "").replace(/\u200B/g, '');
+    } else if (node.nodeType === globalThis.Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (el.nodeName === "BR") {
+        val += "\n";
+      } else if (el.hasAttribute("data-raw")) {
+        val += decodeURIComponent(el.getAttribute("data-raw") || "");
+      } else {
+        el.childNodes.forEach(walk);
+      }
+    }
+  }
+  temp.childNodes.forEach(walk);
+  return val;
+}
+
+function AutocompletePopup({ popover, onSelect }: { popover: any, onSelect: (name: string) => void }) {
+  if (!popover.show) return null
+  return (
+    <div 
+      className="absolute z-50 min-w-[200px] max-h-[160px] overflow-y-auto bg-card border border-primary/20 shadow-xl rounded-md p-1 flex flex-col"
+      style={{ top: popover.top, left: popover.left }}
+    >
+      <div className="px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase tracking-widest border-b mb-1">
+        Available Fields
+      </div>
+      {popover.options.map((opt: any, idx: number) => (
+        <button
+          key={opt.name}
+          type="button"
+          onMouseDown={(e) => {
+             e.preventDefault() // prevent blur
+             onSelect(opt.name)
+          }}
+          className={`flex flex-col text-left px-2 py-1.5 rounded-sm transition-colors ${
+            idx === popover.activeIndex ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"
+          }`}
+        >
+          <div className="flex justify-between items-center gap-2">
+            <span className="font-mono text-xs font-bold truncate">{opt.name}</span>
+            <span className={`text-[9px] uppercase tracking-wide opacity-70 ${idx === popover.activeIndex ? "" : "text-primary"}`}>{opt.type}</span>
+          </div>
+          {opt.description && (
+            <span className="text-[10px] opacity-70 truncate max-w-full">{opt.description}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function getCaretCharacterOffsetWithin(element: HTMLElement) {
+  let caretOffset = 0;
+  const doc = element.ownerDocument;
+  const win = doc.defaultView;
+  let sel;
+  if (win && (sel = win.getSelection()) && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(element);
+    preCaretRange.setEnd(range.endContainer, range.endOffset);
+    // count length of text but we also have to account for nodes.
+    // parseHtmlToValue logic is perfect to measure the raw length up to the caret!
+    const tempHtml = document.createElement("div");
+    tempHtml.appendChild(preCaretRange.cloneContents());
+    caretOffset = parseHtmlToValue(tempHtml.innerHTML).length;
+  }
+  return caretOffset;
+}
+
+// A unified rich input component for true visual chips
+interface RichInputProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
+  value?: string;
+  onChange?: (e: { target: { value: string }; currentTarget: { value: string } }) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  type?: string; // accepted but ignored, for API compat
+}
+
+const DroppableRichInput = React.forwardRef<HTMLDivElement, RichInputProps>(({ value, onChange, placeholder, className, multiline, type, ...props }, ref) => {
+  const divRef = React.useRef<HTMLDivElement>(null)
+  React.useImperativeHandle(ref, () => divRef.current as HTMLDivElement)
+  const nodes = React.useContext(WorkflowNodesContext)
+
+  const [popover, setPopover] = React.useState<{ show: boolean, top: number, left: number, options: any[], activeIndex: number, matchStart: number }>({
+    show: false, top: 0, left: 0, options: [], activeIndex: 0, matchStart: -1
+  })
+
+  // We track the focused state so we don't aggressively overwrite innerHTML while the user is typing,
+  // which destroys native cursor behavior.
+  const [isFocused, setIsFocused] = React.useState(false);
+
+  // Sync value -> HTML only when not focused or initially
+  React.useEffect(() => {
+    if (divRef.current && !isFocused) {
+      const html = parseValueToHtml(value || "", nodes);
+      if (divRef.current.innerHTML !== html) {
+        divRef.current.innerHTML = html;
+      }
+    }
+  }, [value, isFocused, nodes]);
+
+  const triggerChange = (newVal: string) => {
+    // Fake the React event structure
+    if (onChange) {
+      onChange({ target: { value: newVal }, currentTarget: { value: newVal } });
+    }
+  }
+
+  const handleInput = () => {
+    if (!divRef.current) return;
+    const currentHtml = divRef.current.innerHTML;
+    const newVal = parseHtmlToValue(currentHtml);
+    triggerChange(newVal);
+
+    // Autocomplete Logic
+    const cursor = getCaretCharacterOffsetWithin(divRef.current);
+    const textBeforeCursor = newVal.substring(0, cursor);
+    
+    const match = textBeforeCursor.match(/\{\{\s*\$node\["([^"]+)"\]\.json\.([\w]*)$/);
+    if (match) {
+      const nodeId = match[1];
+      const partialField = match[2].toLowerCase();
+      const fields = getStaticNodeFields(nodeId, nodes);
+      const filtered = partialField 
+        ? fields.filter(f => f.name.toLowerCase().startsWith(partialField))
+        : fields;
+        
+      if (filtered.length > 0) {
+        const rect = divRef.current.getBoundingClientRect();
+        setPopover({
+          show: true,
+          top: rect.height + 2,
+          left: 0,
+          options: filtered,
+          activeIndex: 0,
+          matchStart: cursor - partialField.length
+        });
+        return;
+      }
+    }
+    setPopover(p => p.show ? { ...p, show: false } : p);
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const data = e.dataTransfer.getData("text/plain");
-    if (data) {
-      const input = e.currentTarget;
-      const start = input.selectionStart || 0;
-      const end = input.selectionEnd || 0;
-      const newVal = input.value.substring(0, start) + data + input.value.substring(end);
-      
-      // trigger react onChange
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-      nativeInputValueSetter?.call(input, newVal);
-      const ev = new Event("input", { bubbles: true });
-      input.dispatchEvent(ev);
+    if (data && divRef.current) {
+      const newVal = parseHtmlToValue(divRef.current.innerHTML) + data;
+      triggerChange(newVal);
+      // Immediately force a re-render of chips
+      setTimeout(() => {
+        if (divRef.current) {
+           divRef.current.innerHTML = parseValueToHtml(newVal, nodes);
+           divRef.current.focus();
+        }
+      }, 0);
     }
-  };
-  return <Input ref={ref} {...props} onDragOver={e => e.preventDefault()} onDrop={handleDrop} />;
-});
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" && !multiline) {
+      e.preventDefault();
+    }
+    
+    if (popover.show) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setPopover(p => ({ ...p, activeIndex: (p.activeIndex + 1) % p.options.length }));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setPopover(p => ({ ...p, activeIndex: (p.activeIndex - 1 + p.options.length) % p.options.length }));
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const selected = popover.options[popover.activeIndex];
+        if (selected && divRef.current) {
+          const currentVal = parseHtmlToValue(divRef.current.innerHTML);
+          const startStr = currentVal.substring(0, popover.matchStart);
+          const cursor = getCaretCharacterOffsetWithin(divRef.current);
+          const endStr = currentVal.substring(cursor);
+          const newVal = startStr + selected.name + " }}" + endStr;
+          
+          triggerChange(newVal);
+          setPopover(p => ({ ...p, show: false }));
+
+          // Force chips to re-render immediately and focus
+          setTimeout(() => {
+            if (divRef.current) {
+               divRef.current.innerHTML = parseValueToHtml(newVal, nodes);
+               divRef.current.focus();
+            }
+          }, 0);
+        }
+      } else if (e.key === "Escape") {
+        setPopover(p => ({ ...p, show: false }));
+      }
+    }
+  }
+
+  return (
+    <div className={`relative group w-full ${className}`}>
+      <div 
+        ref={divRef}
+        contentEditable
+        suppressContentEditableWarning
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => {
+          setIsFocused(false);
+          setPopover(p => ({ ...p, show: false }));
+        }}
+        onInput={handleInput}
+        onClick={handleInput}
+        onKeyDown={handleKeyDown}
+        onDragOver={e => e.preventDefault()}
+        onDrop={handleDrop}
+        className={`w-full h-full font-mono text-xs bg-background border border-input rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground overflow-y-auto overflow-x-hidden break-words whitespace-pre-wrap leading-relaxed min-h-[36px] ${
+          !value ? 'empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50' : ''
+        }`}
+        data-placeholder={placeholder}
+      />
+      <AutocompletePopup popover={popover} onSelect={(name) => {
+        if (!divRef.current) return;
+        const currentVal = parseHtmlToValue(divRef.current.innerHTML);
+        const startStr = currentVal.substring(0, popover.matchStart);
+        const cursor = getCaretCharacterOffsetWithin(divRef.current);
+        const endStr = currentVal.substring(cursor);
+        const newVal = startStr + name + " }}" + endStr;
+        triggerChange(newVal);
+        setPopover(p => ({ ...p, show: false }));
+        setTimeout(() => {
+          if (divRef.current) {
+             divRef.current.innerHTML = parseValueToHtml(newVal, nodes);
+             divRef.current.focus();
+          }
+        }, 0);
+      }} />
+    </div>
+  )
+})
+DroppableRichInput.displayName = "DroppableRichInput"
+
+const DroppableInput = React.forwardRef<HTMLDivElement, RichInputProps>((props, ref) => <DroppableRichInput {...props} ref={ref} />);
 DroppableInput.displayName = "DroppableInput";
 
-const DroppableTextarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>((props, ref) => {
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    e.preventDefault();
-    const data = e.dataTransfer.getData("text/plain");
-    if (data) {
-      const input = e.currentTarget;
-      const start = input.selectionStart || 0;
-      const end = input.selectionEnd || 0;
-      const newVal = input.value.substring(0, start) + data + input.value.substring(end);
-      
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-      nativeInputValueSetter?.call(input, newVal);
-      const ev = new Event("input", { bubbles: true });
-      input.dispatchEvent(ev);
-    }
-  };
-  return <Textarea ref={ref} {...props} onDragOver={e => e.preventDefault()} onDrop={handleDrop} />;
-});
+const DroppableTextarea = React.forwardRef<HTMLDivElement, RichInputProps>((props, ref) => <DroppableRichInput multiline {...props} ref={ref} />);
 DroppableTextarea.displayName = "DroppableTextarea";
+
+// Recursive JSON Tree Viewer
+const JsonViewer = ({ data, level = 0 }: { data: any, level?: number }) => {
+  const [isExpanded, setIsExpanded] = React.useState(true)
+  
+  if (data === null) return <span className="text-muted-foreground/60 italic font-mono text-[10px]">null</span>
+  if (data === undefined) return <span className="text-muted-foreground/60 italic font-mono text-[10px]">undefined</span>
+  if (typeof data === "string") {
+    // Truncate super long strings like base64 images
+    const isLong = data.length > 100
+    const displayStr = isLong ? data.substring(0, 100) + "..." : data
+    return <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px] break-all">"{displayStr}"</span>
+  }
+  if (typeof data === "number") return <span className="text-blue-600 dark:text-blue-400 font-mono text-[10px]">{data}</span>
+  if (typeof data === "boolean") return <span className="text-rose-600 dark:text-rose-400 font-mono text-[10px]">{data ? "true" : "false"}</span>
+  
+  if (Array.isArray(data)) {
+    if (data.length === 0) return <span className="text-foreground font-mono text-[10px]">[]</span>
+    return (
+      <div className="font-mono text-[10px]">
+        <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => setIsExpanded(!isExpanded)}>
+          <span className="text-muted-foreground/50 hover:text-foreground">{isExpanded ? "▼" : "▶"}</span>
+          <span>[</span>
+          {!isExpanded && <span className="text-muted-foreground/60 italic"> {data.length} items </span>}
+          {!isExpanded && <span>]</span>}
+        </div>
+        {isExpanded && (
+          <div className="pl-4 border-l border-border/50 ml-1.5 mt-0.5 space-y-0.5">
+            {data.map((item, i) => (
+              <div key={i} className="flex items-start gap-1">
+                <span className="text-muted-foreground/50 select-none">{i}:</span>
+                <JsonViewer data={item} level={level + 1} />
+              </div>
+            ))}
+          </div>
+        )}
+        {isExpanded && <div className="ml-1">]</div>}
+      </div>
+    )
+  }
+  
+  if (typeof data === "object") {
+    const keys = Object.keys(data)
+    if (keys.length === 0) return <span className="text-foreground font-mono text-[10px]">{"{}"}</span>
+    return (
+      <div className="font-mono text-[10px]">
+        <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => setIsExpanded(!isExpanded)}>
+          <span className="text-muted-foreground/50 hover:text-foreground">{isExpanded ? "▼" : "▶"}</span>
+          <span>{"{"}</span>
+          {!isExpanded && <span className="text-muted-foreground/60 italic"> {keys.length} keys </span>}
+          {!isExpanded && <span>{"}"}</span>}
+        </div>
+        {isExpanded && (
+          <div className="pl-4 border-l border-border/50 ml-1.5 mt-0.5 space-y-0.5">
+            {keys.map(k => (
+              <div key={k} className="flex items-start gap-1">
+                <span className="text-primary/80 select-none">"{k}":</span>
+                <JsonViewer data={data[k]} level={level + 1} />
+              </div>
+            ))}
+          </div>
+        )}
+        {isExpanded && <div className="ml-1">{"}"}</div>}
+      </div>
+    )
+  }
+  
+  return <span className="text-foreground font-mono text-[10px]">{String(data)}</span>
+}
 
 // Collapsible Thought Component for Modern Aesthetic
 const ThoughtBlock = ({ thought }: { thought: string }) => {
@@ -1071,6 +1435,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [isSheetOpen, setIsSheetOpen] = React.useState(false)
   const [isRunSheetOpen, setIsRunSheetOpen] = React.useState(false)
   const [maximizedImage, setMaximizedImage] = React.useState<string | null>(null)
+  const [upstreamSearch, setUpstreamSearch] = React.useState("")
 
   // AI Assistant Chat panel states
   const { settings } = useAiSettings()
@@ -2624,6 +2989,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   }
 
   return (
+    <WorkflowNodesContext.Provider value={nodes}>
     <SidebarProvider>
       <AppSidebar 
         user={{ 
@@ -2987,9 +3353,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                                       );
                                     })()
                                   )}
-                                  <div className="bg-muted/30 border border-border p-3 rounded-md overflow-x-auto text-[10px] font-mono text-foreground mt-1 shadow-sm relative group">
+                                  <div className="bg-muted/30 border border-border p-3 rounded-md overflow-x-auto mt-1 shadow-sm relative group">
                                     <div className="absolute top-2 right-2 text-[9px] uppercase tracking-wider text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">Payload</div>
-                                    <pre>{JSON.stringify(log.data, null, 2)}</pre>
+                                    <JsonViewer data={log.data} />
                                   </div>
                                 </div>
                               )}
@@ -3023,48 +3389,109 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               {selectedNode && (
                 <div className="relative flex-1 min-h-0 flex flex-col">
                   {/* Upstream Variables Panel */}
-                  <div className="shrink-0 p-4 border-b bg-muted/20">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Available Upstream Variables</Label>
-                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                      {getUpstreamNodeIds(edges, selectedNode.id).map(uid => {
-                        const node = nodes.find(n => n.id === uid);
-                        if (!node) return null;
-                        const dragText = `{{ $node["${uid}"].json }}`;
-                        return (
-                          <div 
-                            key={uid}
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData("text/plain", dragText);
-                              e.dataTransfer.effectAllowed = "copy";
-                            }}
-                            onClick={() => {
-                              // Optional click-to-copy
-                              navigator.clipboard.writeText(dragText);
-                            }}
-                            className="text-[10px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded shadow-sm flex items-center gap-1.5"
-                            title="Drag into an input field or click to copy"
-                          >
-                            <RepeatIcon className="size-3" />
-                            <span className="font-mono font-bold truncate max-w-[120px]">{node.data.label}</span>
-                          </div>
-                        )
-                      })}
+                  <div className="shrink-0 p-4 border-b bg-muted/20 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Available Upstream Variables</Label>
+                      <div className="relative w-32">
+                        <SearchIcon className="absolute left-1.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                        <Input
+                          value={upstreamSearch}
+                          onChange={(e) => setUpstreamSearch(e.target.value)}
+                          placeholder="Search..."
+                          className="h-6 text-[10px] pl-6 py-0 focus-visible:ring-1 focus-visible:ring-primary/30"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
                       {getUpstreamNodeIds(edges, selectedNode.id).length === 0 && (
                         <span className="text-[10px] text-muted-foreground italic">No upstream nodes connected.</span>
                       )}
-                      {selectedNode.data.type !== "trigger" && (
-                        <div 
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("text/plain", `{{ $json.field }}`);
-                            e.dataTransfer.effectAllowed = "copy";
-                          }}
-                          className="text-[10px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-1 rounded shadow-sm flex items-center gap-1.5"
-                          title="Drag into an input field to map current item"
-                        >
-                          <BracesIcon className="size-3" />
-                          <span className="font-mono font-bold">Current Item Data</span>
+                      
+                      {getUpstreamNodeIds(edges, selectedNode.id).map((uid, idx) => {
+                        const node = nodes.find(n => n.id === uid);
+                        if (!node) return null;
+                        
+                        const fields = getStaticNodeFields(uid, nodes);
+                        
+                        const filteredFields = upstreamSearch 
+                          ? fields.filter(f => f.name.toLowerCase().includes(upstreamSearch.toLowerCase()))
+                          : fields;
+                          
+                        const matchesNodeName = upstreamSearch && node.data.label.toLowerCase().includes(upstreamSearch.toLowerCase());
+                        
+                        if (upstreamSearch && !matchesNodeName && filteredFields.length === 0) {
+                          return null;
+                        }
+                        
+                        return (
+                          <Collapsible key={uid} defaultOpen={upstreamSearch ? true : idx === 0} className="border border-border/50 bg-background/50 rounded-md overflow-hidden">
+                            <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 transition-colors text-xs font-bold text-foreground">
+                              <div className="flex items-center gap-1.5">
+                                <div className="size-1.5 rounded-full bg-primary/60" />
+                                {node.data.label}
+                                {upstreamSearch && filteredFields.length > 0 && (
+                                  <span className="ml-1 text-[9px] text-muted-foreground font-normal bg-muted px-1 rounded-full">{filteredFields.length}</span>
+                                )}
+                              </div>
+                              <ChevronDownIcon className="size-3.5 text-muted-foreground/70" />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="p-2 pt-0 pl-4 border-t border-border/50 bg-card/30">
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {/* Option to drag the entire node payload */}
+                                {(!upstreamSearch || matchesNodeName || "entire payload".includes(upstreamSearch.toLowerCase())) && (
+                                  <div 
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData("text/plain", `{{ $node["${uid}"].json }}`);
+                                      e.dataTransfer.effectAllowed = "copy";
+                                    }}
+                                    className="text-[9px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-primary/5 text-primary border border-primary/20 px-1.5 py-0.5 rounded flex items-center gap-1"
+                                    title="Drag the entire JSON payload"
+                                  >
+                                    <BracesIcon className="size-2.5 opacity-70" />
+                                    <span className="font-mono font-bold">Entire Payload</span>
+                                  </div>
+                                )}
+                                
+                                {/* Options to drag specific fields */}
+                                {filteredFields.map(f => (
+                                  <div 
+                                    key={f.name}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData("text/plain", `{{ $node["${uid}"].json.${f.name} }}`);
+                                      e.dataTransfer.effectAllowed = "copy";
+                                    }}
+                                    className="text-[9px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-primary/10 text-primary border border-primary/30 px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1"
+                                    title={`Drag field: ${f.name}`}
+                                  >
+                                    <span className="font-mono font-bold truncate max-w-[120px]">{f.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        )
+                      })}
+                      
+                      {selectedNode.data.type !== "trigger" && (!upstreamSearch || "current item loop".includes(upstreamSearch.toLowerCase())) && (
+                        <div className="flex flex-col gap-1.5 mt-1 pt-2 border-t border-border/50">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600">
+                            <div className="size-1.5 rounded-full bg-emerald-500/60" />
+                            Loop / Current Context
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 pl-3">
+                            <div 
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", `{{ $json }}`);
+                                e.dataTransfer.effectAllowed = "copy";
+                              }}
+                              className="text-[9px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1"
+                            >
+                              <span className="font-mono font-bold">Current Item</span>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -3974,5 +4401,6 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         </div>
       )}
     </SidebarProvider>
+    </WorkflowNodesContext.Provider>
   )
 }
