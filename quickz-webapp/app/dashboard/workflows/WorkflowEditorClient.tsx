@@ -15,6 +15,7 @@ import ReactFlow, {
   type Node,
   Handle,
   Position,
+  NodeResizer,
 } from "reactflow"
 import "reactflow/dist/style.css"
 
@@ -54,6 +55,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu"
 import { 
   ClockIcon, 
   SparklesIcon, 
@@ -181,6 +189,7 @@ const AVAILABLE_TILES: AvailableTile[] = [
   { name: "Transform", description: "Map and restructure data fields", type: "transform", icon: <Wand2Icon className="size-4 text-white" />, color: "lime", defaultParams: { mapping: "{}" } },
   { name: "Filter", description: "Filter items in an array or stop execution", type: "filter", icon: <FilterIcon className="size-4 text-white" />, color: "orange", defaultParams: { condition: "{{$json.value}} == true" } },
   { name: "Classifier / Match", description: "Route dynamically based on matching incoming values to custom possibilities", type: "classifier", icon: <LayersIcon className="size-4 text-white" />, color: "amber", defaultParams: { valueToMatch: "{{$json.status}}", possibilities: "new, assigned, resolved" } },
+  { name: "Group Container", description: "Visual container to organize nodes (e.g., body of a loop)", type: "group", icon: <LayersIcon className="size-4 text-white" />, color: "indigo", defaultParams: {} },
 ]
 
 // Custom Node component inside React Flow — solid, opaque, strong visual cards
@@ -334,14 +343,17 @@ const CustomWorkflowNode = ({ data }: { data: NodeData }) => {
 }
 
 // Group Node Component for Visual Encapsulation
-const GroupWorkflowNode = ({ data }: { data: NodeData }) => {
+const GroupWorkflowNode = ({ data, selected }: { data: NodeData, selected?: boolean }) => {
   return (
-    <div className={`w-full h-full border-2 border-dashed border-indigo-500/50 bg-indigo-500/5 rounded-xl pointer-events-none relative transition-colors ${data.status === "running" ? "border-amber-500 bg-amber-500/10" : ""}`}>
-      <div className="absolute -top-3 left-4 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900 border border-indigo-500/50 rounded text-[10px] font-mono font-bold text-indigo-700 dark:text-indigo-300 shadow-sm flex items-center gap-1.5">
-        <RepeatIcon className="size-3" />
-        {data.label}
+    <>
+      <NodeResizer color="#6366f1" isVisible={selected} minWidth={200} minHeight={150} />
+      <div className={`w-full h-full border-2 border-dashed border-indigo-500/50 bg-indigo-500/5 rounded-xl relative transition-colors ${data.status === "running" ? "border-amber-500 bg-amber-500/10" : ""}`}>
+        <div className="absolute -top-3 left-4 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900 border border-indigo-500/50 rounded text-[10px] font-mono font-bold text-indigo-700 dark:text-indigo-300 shadow-sm flex items-center gap-1.5">
+          <RepeatIcon className="size-3" />
+          {data.label}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -1762,6 +1774,102 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     }))
   }
 
+  const groupSelectedNodes = React.useCallback(() => {
+    const selected = nodes.filter(n => n.selected && n.type !== "group" && n.data.type !== "group" && !n.parentId)
+    if (selected.length < 1) return
+
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+
+    selected.forEach(n => {
+      if (n.position.x < minX) minX = n.position.x
+      if (n.position.y < minY) minY = n.position.y
+      
+      // Node width/height might not be available, fallbacks to typical block size
+      const width = n.width || 240
+      const height = n.height || 100
+      if (n.position.x + width > maxX) maxX = n.position.x + width
+      if (n.position.y + height > maxY) maxY = n.position.y + height
+    })
+
+    // Padding for group node
+    const padding = 40
+    minX -= padding
+    minY -= padding
+    maxX += padding
+    maxY += padding
+
+    const groupId = `group-${nodes.length + 1}`
+    
+    const newGroupNode: Node<NodeData> = {
+      id: groupId,
+      type: "group",
+      position: { x: minX, y: minY },
+      style: { width: maxX - minX, height: maxY - minY },
+      data: {
+        label: "New Group",
+        type: "group",
+        icon: <LayersIcon className="size-4 text-white" />,
+        color: "indigo",
+        status: "idle",
+        params: {}
+      }
+    }
+
+    setNodes(prev => {
+      const updatedNodes = prev.map(n => {
+        if (n.selected && n.type !== "group" && n.data.type !== "group" && !n.parentId) {
+          return {
+            ...n,
+            parentId: groupId,
+            // Relative position to parent
+            position: { x: n.position.x - minX, y: n.position.y - minY },
+            selected: false
+          }
+        }
+        return n
+      })
+      
+      return [...updatedNodes, newGroupNode]
+    })
+    
+    setLogs(prev => [...prev, { message: `[System] Grouped ${selected.length} nodes.` }])
+  }, [nodes, setNodes])
+
+  const ungroupSelectedNodes = React.useCallback(() => {
+    const selectedGroups = nodes.filter(n => n.selected && (n.type === "group" || n.data.type === "group"))
+    
+    if (selectedGroups.length === 0) return
+
+    setNodes(prev => {
+      let nextNodes = [...prev]
+      selectedGroups.forEach(group => {
+        // Move children out
+        nextNodes = nextNodes.map(n => {
+          if (n.parentId === group.id) {
+            return {
+              ...n,
+              parentId: undefined,
+              // Convert relative position to absolute
+              position: { 
+                x: n.position.x + group.position.x, 
+                y: n.position.y + group.position.y 
+              }
+            }
+          }
+          return n
+        })
+        // Remove group
+        nextNodes = nextNodes.filter(n => n.id !== group.id)
+      })
+      return nextNodes
+    })
+    
+    setLogs(prev => [...prev, { message: `[System] Ungrouped ${selectedGroups.length} groups.` }])
+  }, [nodes, setNodes])
+
   const deleteSelectedElement = () => {
     if (selectedNode) {
       setNodes(prev => prev.filter(n => n.id !== selectedNode.id))
@@ -1965,7 +2073,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
   // Direct addition of nodes from clicking the Toolbox / quick panels
   const addBlockNode = (block: AvailableTile) => {
-    const newId = `node-${nodes.length + 1}`
+    const newId = block.type === "group" ? `group-${nodes.length + 1}` : `node-${nodes.length + 1}`
     
     // Position slightly offset from the last node
     const lastNode = nodes[nodes.length - 1]
@@ -1974,8 +2082,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
     const newNode: Node<NodeData> = {
       id: newId,
-      type: "custom",
+      type: block.type === "group" ? "group" : "custom",
       position: { x: xPos, y: yPos },
+      style: block.type === "group" ? { width: 400, height: 300 } : undefined,
       data: {
         label: block.name,
         type: block.type,
@@ -2639,16 +2748,20 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         // Get downstream nodes from this loop node
         // Auto-heal: Ensure all nodes downstream of the loop node (excluding output sinks and groups) are assigned to the group
         const associatedGroup = allNodes.find(n => n.type === "group" || n.data.type === "group")
-        const groupId = associatedGroup?.id || "group-1"
         const downstreamAll = getDownstreamNodes(node.id, allNodes, allEdges)
-        downstreamAll.forEach(dn => {
-          if (dn.id !== node.id && dn.data.type !== "output" && dn.type !== "group" && dn.data.type !== "group" && !dn.parentId) {
-            dn.parentId = groupId
-            setNodes(prev => prev.map(n => n.id === dn.id ? { ...n, parentId: groupId } : n))
-          }
-        })
+        
+        if (associatedGroup) {
+          const groupId = associatedGroup.id
+          downstreamAll.forEach(dn => {
+            if (dn.id !== node.id && dn.data.type !== "output" && dn.type !== "group" && dn.data.type !== "group" && !dn.parentId) {
+              dn.parentId = groupId
+              setNodes(prev => prev.map(n => n.id === dn.id ? { ...n, parentId: groupId } : n))
+            }
+          })
+        }
 
-        const downstreamNodes = getDownstreamNodes(node.id, allNodes, allEdges).filter(n => n.parentId)
+        // We consider all non-output downstream nodes as part of the loop body
+        const downstreamNodes = downstreamAll.filter(n => n.id !== node.id && n.data.type !== "output" && n.type !== "group" && n.data.type !== "group")
         
         // Mark all these internal nodes as loopInternal so they are skipped in the main pass
         downstreamNodes.forEach(dn => loopInternalNodeIds.add(dn.id))
@@ -3090,10 +3203,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           </div>
 
           {/* React Flow Workspace */}
-          <div className="flex-1 h-full relative">
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
+          <ContextMenu>
+            <ContextMenuTrigger className="flex-1 h-full relative flex flex-col min-h-0 overflow-hidden">
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
@@ -3127,6 +3241,36 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 className="!bg-card !border-border rounded-none"
               />
             </ReactFlow>
+
+            <ContextMenuContent className="w-48 bg-card border-border shadow-xl">
+              <ContextMenuItem 
+                onClick={groupSelectedNodes}
+                disabled={nodes.filter(n => n.selected && n.type !== "group" && !n.parentId).length === 0}
+                className="cursor-pointer font-medium"
+              >
+                <LayersIcon className="mr-2 size-4" />
+                Group Selected
+              </ContextMenuItem>
+              <ContextMenuItem 
+                onClick={ungroupSelectedNodes}
+                disabled={nodes.filter(n => n.selected && (n.type === "group" || n.data.type === "group")).length === 0}
+                className="cursor-pointer font-medium"
+              >
+                <Trash2Icon className="mr-2 size-4 text-destructive" />
+                Ungroup Selected
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem 
+                onClick={() => {
+                  setNodes([])
+                  setEdges([])
+                }}
+                className="cursor-pointer font-medium text-destructive"
+              >
+                <Trash2Icon className="mr-2 size-4" />
+                Clear Canvas
+              </ContextMenuItem>
+            </ContextMenuContent>
 
             {/* Premium Bottom Center AI Omni Box (Centered in Canvas) */}
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 w-full max-w-xl px-4">
@@ -3226,7 +3370,8 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 </form>
               </div>
             </div>
-          </div>
+            </ContextMenuTrigger>
+          </ContextMenu>
 
           {/* Run Output Sheet (Right Sidebar) */}
           {isRunSheetOpen && (
