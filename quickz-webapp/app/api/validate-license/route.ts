@@ -23,7 +23,9 @@ export async function POST(req: Request) {
     }
 
     // Check if device is already activated
-    const existingActivation = license.activations.find(a => a.deviceHash === device_hash);
+    const existingActivation = license.activations.find(
+      (a: { deviceHash: string; id: string }) => a.deviceHash === device_hash
+    );
 
     if (existingActivation) {
       // Update last seen
