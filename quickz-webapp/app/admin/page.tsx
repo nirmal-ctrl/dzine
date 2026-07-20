@@ -4,10 +4,29 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+interface PaymentWithUser {
+  id: string;
+  amount: number;
+  status: string;
+  user?: {
+    name?: string | null;
+    email?: string | null;
+  } | null;
+}
+
+interface LicenseWithUser {
+  id: string;
+  licenseKey: string;
+  isActive: boolean;
+  user?: {
+    email?: string | null;
+  } | null;
+}
+
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user as any).role !== "ADMIN") {
+  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
     // Check if the email matches the ADMIN_EMAIL in .env
     if (session?.user?.email !== process.env.ADMIN_EMAIL) {
         redirect("/dashboard");
@@ -79,11 +98,11 @@ export default async function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y text-sm">
-                    {recentPayments.map((payment) => (
+                    {recentPayments.map((payment: PaymentWithUser) => (
                       <tr key={payment.id}>
                         <td className="px-4 py-4">
-                          <p className="font-medium text-black">{payment.user.name || 'Unknown'}</p>
-                          <p className="text-xs text-gray-500">{payment.user.email}</p>
+                          <p className="font-medium text-black">{payment.user?.name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500">{payment.user?.email}</p>
                         </td>
                         <td className="px-4 py-4 text-black font-semibold">₹{payment.amount}</td>
                         <td className="px-4 py-4">
@@ -111,10 +130,10 @@ export default async function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y text-sm">
-                    {recentLicenses.map((license) => (
+                    {recentLicenses.map((license: LicenseWithUser) => (
                       <tr key={license.id}>
                         <td className="px-4 py-4 font-mono text-black">{license.licenseKey}</td>
-                        <td className="px-4 py-4 text-gray-600">{license.user.email}</td>
+                        <td className="px-4 py-4 text-gray-600">{license.user?.email}</td>
                         <td className="px-4 py-4">
                           <span className={`px-2 py-1 rounded text-[10px] font-bold ${license.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                             {license.isActive ? 'ACTIVE' : 'INACTIVE'}

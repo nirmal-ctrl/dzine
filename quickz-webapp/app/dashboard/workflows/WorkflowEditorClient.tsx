@@ -87,7 +87,9 @@ import {
   Wand2Icon,
   SearchIcon,
   CopyIcon,
-  CheckIcon
+  CheckIcon,
+  WorkflowIcon,
+  ArrowLeftIcon
 } from "lucide-react"
 
 // Dynamic nodes typing & parameters
@@ -1539,12 +1541,203 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   
+  // Database Workflows States
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [workflows, setWorkflows] = React.useState<any[]>([])
+  const [activeWorkflowId, setActiveWorkflowId] = React.useState<string | null>(null)
+  const [loadingWorkflows, setLoadingWorkflows] = React.useState(true)
+  const [saving, setSaving] = React.useState(false)
+  const [workflowName, setWorkflowName] = React.useState("")
+  const [workflowDescription, setWorkflowDescription] = React.useState("")
+  
+  // Modal for new workflow
+  const [showCreateModal, setShowCreateModal] = React.useState(false)
+  const [newWorkflowName, setNewWorkflowName] = React.useState("")
+  const [newWorkflowDescription, setNewWorkflowDescription] = React.useState("")
+  
+  // Search state for list
+  const [searchQuery, setSearchQuery] = React.useState("")
+
   const [omniInput, setOmniInput] = React.useState("")
   const [aiGenerating, setAiGenerating] = React.useState(false)
   const [isRunning, setIsExecuting] = React.useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [logs, setLogs] = React.useState<{ id?: string, nodeId?: string, label?: string, type?: NodeType, status?: "running" | "success" | "error", message: string, data?: any }[]>([])
   
+  const fetchWorkflows = async () => {
+    try {
+      setLoadingWorkflows(true)
+      const res = await fetch("/api/workflows")
+      if (res.ok) {
+        const data = await res.json()
+        setWorkflows(data)
+      }
+    } catch (err) {
+      console.error("Failed to fetch workflows:", err)
+    } finally {
+      setLoadingWorkflows(false)
+    }
+  }
+
+  React.useEffect(() => {
+    fetchWorkflows()
+  }, [])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loadWorkflow = async (id: string) => {
+    try {
+      setLoadingWorkflows(true)
+      const res = await fetch(`/api/workflows/${id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setActiveWorkflowId(data.id)
+        setWorkflowName(data.name)
+        setWorkflowDescription(data.description || "")
+        
+        const dbNodes = data.nodes || []
+        const dbEdges = data.edges || []
+        
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rehydratedNodes = dbNodes.map((n: any) => {
+          const tile = AVAILABLE_TILES.find(t => t.type === n.data.type)
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              icon: tile?.icon || <ZapIcon className="size-4 text-white" />,
+              color: tile?.color || "slate",
+              status: "idle"
+            }
+          }
+        })
+        
+        setNodes(rehydratedNodes)
+        setEdges(dbEdges)
+        setLogs([])
+        setSelectedNode(null)
+        setSelectedEdge(null)
+        setIsSheetOpen(false)
+        setIsRunSheetOpen(false)
+      }
+    } catch (err) {
+      console.error("Failed to load workflow:", err)
+    } finally {
+      setLoadingWorkflows(false)
+    }
+  }
+
+  const createWorkflow = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!newWorkflowName.trim()) return
+
+    try {
+      setSaving(true)
+      const initialNodes = [
+        {
+          id: "node-1",
+          type: "custom",
+          position: { x: 50, y: 350 },
+          data: {
+            label: "Trigger Webhook",
+            type: "trigger",
+            params: {
+              triggerType: "webhook",
+              eventName: "On Event",
+              contentType: "application/json",
+              inputSchema: JSON.stringify({
+                type: "object",
+                properties: {
+                  context: { type: "string", description: "Business context" }
+                }
+              }, null, 2)
+            }
+          }
+        }
+      ]
+      
+      const res = await fetch("/api/workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newWorkflowName,
+          description: newWorkflowDescription,
+          nodes: initialNodes,
+          edges: []
+        })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setShowCreateModal(false)
+        setNewWorkflowName("")
+        setNewWorkflowDescription("")
+        fetchWorkflows()
+        loadWorkflow(data.id)
+      }
+    } catch (err) {
+      console.error("Failed to create workflow:", err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveWorkflow = async () => {
+    if (!activeWorkflowId) return
+    try {
+      setSaving(true)
+      const cleanNodes = nodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        parentId: n.parentId,
+        extent: n.extent,
+        style: n.style,
+        data: {
+          label: n.data.label,
+          type: n.data.type,
+          params: n.data.params,
+        }
+      }))
+
+      const res = await fetch(`/api/workflows/${activeWorkflowId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: workflowName,
+          description: workflowDescription,
+          nodes: cleanNodes,
+          edges: edges
+        })
+      })
+
+      if (res.ok) {
+        fetchWorkflows()
+      }
+    } catch (err) {
+      console.error("Failed to save workflow:", err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteWorkflow = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    if (!confirm("Are you sure you want to delete this workflow?")) return
+    try {
+      const res = await fetch(`/api/workflows/${id}`, {
+        method: "DELETE"
+      })
+      if (res.ok) {
+        fetchWorkflows()
+        if (activeWorkflowId === id) {
+          setActiveWorkflowId(null)
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete workflow:", err)
+    }
+  }
+
   // Dialog state for workflow inputs
   const [runInputData, setRunInputData] = React.useState<Record<string, string>>({})
   const [expectedInputs, setExpectedInputs] = React.useState<string[]>([])
@@ -1992,177 +2185,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     setSelectedEdge(null)
   }
 
-  // Load default nodes on mount — comprehensive example demonstrating all node types & features
-  React.useEffect(() => {
-    const defaultNodes: Node<NodeData>[] = [
-      // 1. TRIGGER — webhook entry with schema-defined payload (uses Schema Builder)
-      {
-        id: "node-1",
-        type: "custom",
-        position: { x: 50, y: 350 },
-        data: {
-          label: "Pitch Input Webhook",
-          type: "trigger",
-          icon: <ZapIcon className="size-4 text-white" />,
-          color: "slate",
-          status: "idle",
-          params: {
-            triggerType: "webhook",
-            webhookUrl: "",
-            eventName: "New Pitch Generation",
-            contentType: "application/json",
-            inputSchema: JSON.stringify({
-              type: "object",
-              properties: {
-                context: { type: "string", description: "Entire business vision, market size, and solution details" }
-              }
-            }, null, 2),
-            sampleFile: "",
-            outputMapping: JSON.stringify([
-              { key: "context", value: "{{ $json.context }}" }
-            ], null, 2)
-          }
-        }
-      },
-      // 2. LLM — generate outline & slide titles (Slide Outline Generator)
-      {
-        id: "node-2",
-        type: "custom",
-        position: { x: 370, y: 350 },
-        data: {
-          label: "Slide Outline Generator",
-          type: "llm",
-          icon: <BrainCircuitIcon className="size-4 text-white" />,
-          color: "violet",
-          status: "idle",
-          params: {
-            provider: "google",
-            model: "gemini-1.5-flash",
-            apiKey: "",
-            prompt: "You are an expert pitch coach. Analyze this complete business plan:\n{{ $node[\"node-1\"].json.context }}\n\nGenerate a list of exactly 4 slide deck titles that we need to create (e.g., Problem, Solution, Market Gap, Go-To-Market).\n\nReturn strictly a JSON array of slide titles under the key \"slides\". Example format:\n{\n  \"slides\": [\"Problem Statement\", \"Solution\", \"Market Gap\", \"Go-To-Market Strategy\"]\n}",
-            temperature: "0.7",
-            responseFormat: "json_object",
-            jsonSchema: "",
-            outputMapping: JSON.stringify([
-              { key: "slides", value: "{{ $json.slides }}" }
-            ], null, 2)
-          }
-        }
-      },
-      // 3. LOOP — iterate over slides (Slide Iterator — parallel mode by default)
-      {
-        id: "node-3",
-        type: "custom",
-        position: { x: 690, y: 350 },
-        data: {
-          label: "Slide Iterator",
-          type: "loop",
-          icon: <RepeatIcon className="size-4 text-white" />,
-          color: "indigo",
-          status: "idle",
-          params: {
-            arrayPath: "$.slides",
-            itemName: "slideTitle",
-            mode: "parallel"
-          }
-        }
-      },
-      // Group node for loop body
-      {
-        id: "group-1",
-        type: "group",
-        position: { x: 1010, y: 230 },
-        style: { width: 560, height: 240 },
-        data: {
-          label: "Parallel Slide Generation",
-          type: "group",
-          params: {},
-          status: "idle"
-        }
-      },
-      // 4. LLM — detail and prompt generator (Inside loop)
-      {
-        id: "node-4",
-        type: "custom",
-        parentId: "group-1",
-        extent: "parent",
-        position: { x: 40, y: 50 },
-        data: {
-          label: "Detail & Prompt Writer",
-          type: "llm",
-          icon: <BrainCircuitIcon className="size-4 text-white" />,
-          color: "violet",
-          status: "idle",
-          params: {
-            provider: "google",
-            model: "gemini-1.5-flash",
-            apiKey: "",
-            prompt: "Write a high-quality pitch slide write-up.\n\nCurrent Slide Title: {{slideTitle}}\nOverall Business Context: {{ $node[\"node-1\"].json.context }}\n\nWrite 3-4 professional bullet points of content for this slide.\nAlso, write a highly descriptive, artistic image generation prompt for this slide's background vector illustration (describing styling, colors, and layout).\n\nReturn strictly as a JSON object:\n{\n  \"slideContent\": \"bullet points text here...\",\n  \"imagePrompt\": \"vivid vector image prompt here...\"\n}",
-            temperature: "0.7",
-            responseFormat: "json_object",
-            jsonSchema: "",
-            outputMapping: JSON.stringify([
-              { key: "slideContent", value: "{{ $json.slideContent }}" },
-              { key: "imagePrompt", value: "{{ $json.imagePrompt }}" }
-            ], null, 2)
-          }
-        }
-      },
-      // 5. IMAGE GEN — generate illustration (Inside loop)
-      {
-        id: "node-5",
-        type: "custom",
-        parentId: "group-1",
-        extent: "parent",
-        position: { x: 310, y: 50 },
-        data: {
-          label: "Slide Illustrator",
-          type: "image-gen",
-          icon: <ImageIcon className="size-4 text-white" />,
-          color: "rose",
-          status: "idle",
-          params: {
-            apiKey: "",
-            model: "gemini-3.1-flash-image",
-            prompt: "{{ $node[\"node-4\"].json.imagePrompt }}",
-            aspectRatio: "16:9",
-            numberOfImages: "1",
-            imageSize: "1K",
-            personGeneration: "dont_allow",
-            referenceImage: "",
-            outputMapping: JSON.stringify([
-              { key: "image", value: "{{ $json.imageUrl }}" }
-            ], null, 2)
-          }
-        }
-      },
-      // 6. OUTPUT — final pitch deck outcome
-      {
-        id: "node-6",
-        type: "custom",
-        position: { x: 1650, y: 350 },
-        data: {
-          label: "Final Pitch Deck",
-          type: "output",
-          icon: <SquareArrowOutUpRightIcon className="size-4 text-white" />,
-          color: "emerald",
-          status: "idle",
-          params: { outputKey: "pitch_deck", format: "json" }
-        }
-      }
-    ]
-
-    const defaultEdges: Edge[] = [
-      { id: "edge-1-2", source: "node-1", target: "node-2", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
-      { id: "edge-2-3", source: "node-2", target: "node-3", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
-      { id: "edge-3-4", source: "node-3", target: "node-4", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
-      { id: "edge-4-5", source: "node-4", target: "node-5", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 },
-      { id: "edge-5-6", source: "node-5", target: "node-6", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 }, interactionWidth: 20 }
-    ]
-
-    setNodes(defaultNodes)
-    setEdges(defaultEdges)
-  }, [setNodes, setEdges])
+  // Default load disabled on initial render. ReactFlow is populated by loadWorkflow inside dashboard/workflows list.
 
   const onConnect = React.useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge({ 
@@ -3234,43 +3257,224 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           avatar: session.user.image || "" 
         }} 
       />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-card px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/">Home</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Workflow Canvas</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button 
-              size="sm" 
-              onClick={handleRunClick} 
-              disabled={isRunning || nodes.length === 0}
-              className="text-xs rounded-none gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold px-4 h-9"
-            >
-              <PlayCircleIcon className="size-4" />
-              {isRunning ? "Running..." : "Run Workflow"}
-            </Button>
-            <ThemeToggle />
-          </div>
-        </header>
+      <SidebarInset className="flex flex-col h-screen overflow-hidden">
+        {activeWorkflowId === null ? (
+          <div className="flex flex-col flex-1 overflow-y-auto p-8 bg-muted/5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 mb-6">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                  <WorkflowIcon className="size-6 text-primary" />
+                  Workflows Builder
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Create, configure, and automate complex workflows with AI and custom actions.
+                </p>
+              </div>
+              <Button 
+                onClick={() => setShowCreateModal(true)}
+                className="font-semibold gap-1.5 h-11 px-5 text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                + Create New Workflow
+              </Button>
+            </div>
 
-        {/* Full Viewport Canvas */}
-        <div className="relative w-full h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] min-h-[calc(100vh-64px)] flex overflow-hidden bg-muted/5 select-none shrink-0">
+            {/* Search and Filters */}
+            <div className="relative max-w-md mb-6">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search workflows..."
+                className="pl-10 h-10 text-sm focus-visible:ring-1"
+              />
+            </div>
+
+            {/* List / Grid of workflows */}
+            {loadingWorkflows ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center gap-3 text-muted-foreground">
+                <SparkleIcon className="size-8 animate-spin text-primary" />
+                <p className="text-sm">Loading workflows from database...</p>
+              </div>
+            ) : workflows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 border border-dashed rounded-lg bg-card text-center p-8 gap-4">
+                <div className="p-4 bg-muted rounded-full">
+                  <WorkflowIcon className="size-8 text-muted-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">No workflows found</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                    You haven't created any workflows yet. Click the button below to build your first automation.
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => setShowCreateModal(true)}
+                  className="font-semibold gap-1.5 h-10 px-4 text-sm"
+                >
+                  + Create First Workflow
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {workflows
+                  .filter(wf => 
+                    wf.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (wf.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  .map(wf => (
+                    <Card key={wf.id} className="hover:border-primary/50 hover:shadow-md transition-all cursor-pointer bg-card flex flex-col" onClick={() => loadWorkflow(wf.id)}>
+                      <CardContent className="p-5 flex flex-col flex-1 h-full min-h-[160px] justify-between">
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-bold text-base text-foreground truncate">{wf.name}</h3>
+                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                              {new Date(wf.updatedAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-2 leading-relaxed">
+                            {wf.description || "No description provided."}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between border-t pt-4 mt-4 gap-2">
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {wf.nodes ? (Array.isArray(wf.nodes) ? wf.nodes.length : 1) : 1} nodes
+                          </span>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                loadWorkflow(wf.id)
+                              }}
+                              className="text-xs h-8 px-3 font-semibold"
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              onClick={(e) => deleteWorkflow(wf.id, e)}
+                              className="text-xs h-8 px-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
+            )}
+
+            {/* Custom Create Modal Dialog */}
+            {showCreateModal && (
+              <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <form 
+                  onSubmit={createWorkflow} 
+                  className="bg-card border shadow-xl rounded-xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Create New Workflow</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Enter a name and description to create your automated workflow canvas.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Workflow Name</Label>
+                      <Input
+                        value={newWorkflowName}
+                        onChange={(e) => setNewWorkflowName(e.target.value)}
+                        placeholder="e.g. Lead Qualification Engine"
+                        required
+                        className="text-sm h-10 rounded-md"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description (Optional)</Label>
+                      <Textarea
+                        value={newWorkflowDescription}
+                        onChange={(e) => setNewWorkflowDescription(e.target.value)}
+                        placeholder="e.g. Analyzes prospect profiles and creates tailored vector backgrounds."
+                        className="text-sm min-h-[80px] rounded-md resize-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end border-t pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowCreateModal(false)}
+                      className="text-xs h-9 rounded-md"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={saving || !newWorkflowName.trim()}
+                      className="text-xs h-9 rounded-md font-bold"
+                    >
+                      {saving ? "Creating..." : "Create Workflow"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <header className="flex h-16 shrink-0 items-center justify-between border-b bg-card px-4">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => setActiveWorkflowId(null)}
+                  className="gap-1 px-2.5 h-9 text-xs"
+                >
+                  <ArrowLeftIcon className="size-4" />
+                  Workflows
+                </Button>
+                <Separator orientation="vertical" className="mx-1 h-4" />
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Input 
+                    value={workflowName}
+                    onChange={(e) => setWorkflowName(e.target.value)}
+                    className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm font-bold px-0 h-9 font-sans w-full max-w-[240px] truncate"
+                  />
+                  {workflowDescription && (
+                    <span className="hidden md:inline text-xs text-muted-foreground truncate opacity-70">
+                      — {workflowDescription}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={saveWorkflow} 
+                  disabled={saving}
+                  className="text-xs rounded-none font-semibold px-4 h-9"
+                >
+                  {saving ? "Saving..." : "Save Workflow"}
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleRunClick} 
+                  disabled={isRunning || nodes.length === 0}
+                  className="text-xs rounded-none gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold px-4 h-9"
+                >
+                  <PlayCircleIcon className="size-4" />
+                  {isRunning ? "Running..." : "Run Workflow"}
+                </Button>
+                <ThemeToggle />
+              </div>
+            </header>
+
+            {/* Full Viewport Canvas */}
+            <div className="relative w-full h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] min-h-[calc(100vh-64px)] flex overflow-hidden bg-muted/5 select-none shrink-0">
           {/* Canvas Embedded Left Sidebar */}
           <div className="w-[300px] border-r bg-card flex flex-col h-full min-h-0 max-h-full overflow-hidden z-10 shrink-0">
             <div className="p-4 border-b shrink-0">
@@ -4608,6 +4812,8 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             </div>
           )}
         </div>
+          </>
+        )}
       </SidebarInset>
 
       {/* Full Screen Image Lightbox Modal */}
