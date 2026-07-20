@@ -2306,9 +2306,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     if (needsInput) {
       setExpectedInputs(keys)
       const initialData: Record<string, string> = {}
-      keys.forEach(k => initialData[k] = "")
-      // Pre-fill file if sampleFile exists on the node
-      if (keys.includes("_file_") && triggerNode?.data.params.sampleFile) {
+      keys.forEach(k => {
+        initialData[k] = runInputData[k] !== undefined ? runInputData[k] : ""
+      })
+      // Pre-fill file if sampleFile exists on the node and no file is loaded yet
+      if (keys.includes("_file_") && !runInputData["_file_"] && triggerNode?.data.params.sampleFile) {
         initialData["_file_"] = triggerNode.data.params.sampleFile
       }
       setRunInputData(initialData)
@@ -2394,7 +2396,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       // running status
       setNodes(prev => prev.map(n => n.id === node.id ? {
         ...n,
-        data: { ...n.data, params: resolvedParams, status: "running" as const }
+        data: { ...n.data, status: "running" as const }
       } : n))
 
       const logId = Math.random().toString(36).substring(7)
@@ -2433,6 +2435,8 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           // Handle file
           if (customInputs && customInputs["_file_"]) {
             triggerPayload.file = customInputs["_file_"]
+          } else if (runInputData["_file_"]) {
+            triggerPayload.file = runInputData["_file_"]
           } else if (resolvedParams.sampleFile) {
             triggerPayload.file = resolvedParams.sampleFile
           }
@@ -2444,10 +2448,14 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               if (schema.properties) {
                 for (const key of Object.keys(schema.properties)) {
                   // If user provided input via modal, use it, else default/empty (disabled mock execution)
-                  if (customInputs && customInputs[key] !== undefined) {
+                  const inputValue = (customInputs && customInputs[key] !== undefined) 
+                    ? customInputs[key] 
+                    : runInputData[key];
+                    
+                  if (inputValue !== undefined && inputValue !== "") {
                     // Try to cast to number if needed
                     const type = schema.properties[key].type
-                    triggerPayload[key] = type === "number" ? Number(customInputs[key]) : customInputs[key]
+                    triggerPayload[key] = type === "number" ? Number(inputValue) : inputValue
                   } else {
                     const prop = schema.properties[key]
                     triggerPayload[key] = (prop && prop.default !== undefined) ? prop.default : ""
@@ -2937,7 +2945,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
             setNodes(prev => prev.map(n => n.id === subNode.id ? {
               ...n,
-              data: { ...n.data, params: subResolved, status: "running" as const }
+              data: { ...n.data, status: "running" as const }
             } : n))
 
             const logId = Math.random().toString(36).substring(7)
@@ -3303,7 +3311,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 <div>
                   <h3 className="text-base font-bold text-foreground">No workflows found</h3>
                   <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                    You haven't created any workflows yet. Click the button below to build your first automation.
+                    {"You haven't created any workflows yet. Click the button below to build your first automation."}
                   </p>
                 </div>
                 <Button 
