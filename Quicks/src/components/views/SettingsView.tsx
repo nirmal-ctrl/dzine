@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, LogOut, ShieldCheck, Clock, Key } from 'lucide-react';
+import { ArrowLeft, LogOut, ShieldCheck, Key } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';

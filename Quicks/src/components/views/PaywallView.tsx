@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Wand2, Key, ExternalLink, Loader2, CheckCircle, ShieldCheck, Zap, RefreshCw } from 'lucide-react';
 import type { User } from 'firebase/auth';
-import { activateLicense } from '@/lib/licenseService';
+import { validateLicense } from '@/lib/licenseService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,13 +26,13 @@ export function PaywallView({ user, onLicensed }: PaywallViewProps) {
         setError('');
         setLoading(true);
 
-        const result = await activateLicense(user.uid, user.email ?? '', licenseKey.trim());
+        const result = await validateLicense(licenseKey.trim());
 
-        if (result.success) {
+        if (result.valid) {
             setActivated(true);
             setTimeout(onLicensed, 1800);
         } else {
-            setError(result.error ?? 'Activation failed. Please try again.');
+            setError(result.message ?? 'Activation failed. Please try again.');
         }
 
         setLoading(false);

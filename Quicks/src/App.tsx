@@ -21,8 +21,6 @@ import { GenerationTraceView } from "@/components/GenerationTraceView";
 import { StrategySection } from "@/components/sections/StrategySection";
 import { InspirationSection } from "@/components/sections/InspirationSection";
 import { ImagenConfigSection } from "@/components/sections/ImagenConfigSection";
-import { AuthView } from "@/components/views/AuthView";
-import { PaywallView } from "@/components/views/PaywallView";
 import { LicenseView } from "@/components/views/LicenseView";
 
 // Hooks
@@ -39,7 +37,7 @@ import {
 
 export default function App() {
   // Auth & License
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const licenseInfo = useLicense();
   const [licensedOnce, setLicensedOnce] = useState(false);
 
