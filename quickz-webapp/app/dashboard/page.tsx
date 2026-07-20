@@ -20,6 +20,30 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
+interface ActivationType {
+  id: string;
+  deviceName: string | null;
+  activatedAt: string | Date;
+}
+
+interface LicenseType {
+  id: string;
+  licenseKey: string;
+  isActive: boolean;
+  plan: string;
+  activatedDevices: number;
+  maxDevices: number;
+  activations: ActivationType[];
+}
+
+interface PaymentType {
+  id: string;
+  razorpayOrderId: string;
+  amount: number;
+  status: string;
+  createdAt: string | Date;
+}
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
@@ -91,7 +115,7 @@ export default async function DashboardPage() {
                 </div>
               ) : (
                 <div className="grid gap-6 md:grid-cols-2">
-                  {licenses.map((license) => (
+                  {licenses.map((license: LicenseType) => (
                     <div key={license.id} className="bg-card p-6 rounded-lg border shadow-sm">
                       <div className="flex justify-between items-start mb-4">
                         <div>
@@ -116,7 +140,7 @@ export default async function DashboardPage() {
                         <div className="mt-4 border-t pt-4">
                           <p className="text-xs font-bold text-muted-foreground uppercase mb-2">Activated Devices</p>
                           <ul className="space-y-2">
-                            {license.activations.map((activation) => (
+                            {license.activations.map((activation: ActivationType) => (
                               <li key={activation.id} className="text-xs flex justify-between">
                                 <span className="text-foreground">{activation.deviceName || 'Unknown Device'}</span>
                                 <span className="text-muted-foreground">{new Date(activation.activatedAt).toLocaleDateString()}</span>
@@ -145,7 +169,7 @@ export default async function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {payments.map((payment) => (
+                    {payments.map((payment: PaymentType) => (
                       <tr key={payment.id}>
                         <td className="px-6 py-4 text-sm text-muted-foreground font-mono">{payment.razorpayOrderId}</td>
                         <td className="px-6 py-4 text-sm text-foreground font-semibold">₹{payment.amount}</td>
