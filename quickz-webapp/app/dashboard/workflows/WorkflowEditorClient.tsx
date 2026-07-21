@@ -369,6 +369,58 @@ const nodeTypes = {
 // Context to share nodes globally for autocomplete
 const WorkflowNodesContext = React.createContext<Node<NodeData>[]>([])
 
+// Helper to extract loop fields dynamically from any upstream node's schema based on the loop's arrayPath
+function getLoopFields(allNodes: Node<NodeData>[], allEdges: Edge[]): { name: string; path: string }[] {
+  const loopNode = allNodes.find(n => n.data.type === "loop")
+  if (!loopNode) return []
+
+  const arrayPath = loopNode.data.params.arrayPath || "$.slides"
+  
+  // Find all upstream nodes of the loop node to see where the array data is coming from
+  const upstreamIds = getUpstreamNodeIds(allEdges, loopNode.id)
+  if (upstreamIds.length === 0) return []
+
+  // Check upstream nodes (like Trigger or LLM nodes) for valid JSON schemas
+  for (const uid of upstreamIds) {
+    const upstreamNode = allNodes.find(n => n.id === uid)
+    if (!upstreamNode) continue
+
+    // Use "jsonSchema" for LLM nodes or "inputSchema" for Trigger nodes
+    const schemaStr = upstreamNode.data.params.jsonSchema || upstreamNode.data.params.inputSchema
+    if (!schemaStr || schemaStr === "{}") continue
+
+    try {
+      const schema = JSON.parse(schemaStr)
+      if (!schema || schema.type !== "object" || !schema.properties) continue
+
+      // Clean array path: e.g. "$.slides" -> ["slides"]
+      const pathParts = arrayPath.replace(/^\$\./, "").split(".")
+      let currentSchema = schema
+      let found = true
+      
+      for (const part of pathParts) {
+        if (currentSchema && currentSchema.properties && currentSchema.properties[part]) {
+          currentSchema = currentSchema.properties[part]
+        } else {
+          found = false
+          break
+        }
+      }
+
+      if (found && currentSchema.type === "array" && currentSchema.items && currentSchema.items.type === "object" && currentSchema.items.properties) {
+        return Object.keys(currentSchema.items.properties).map(propName => ({
+          name: propName,
+          path: propName
+        }))
+      }
+    } catch {
+      // ignore malformed JSON
+    }
+  }
+
+  return []
+}
+
 // Helper to statically extract fields from a node
 function getStaticNodeFields(nodeId: string, allNodes: Node<NodeData>[]): { name: string; type: string; description?: string }[] {
   const node = allNodes.find(n => n.id === nodeId)
@@ -1188,33 +1240,205 @@ const OutputMappingSection = ({
   )
 }
 
-/** Parse a JSON Schema string into editable field rows (name + type + description). */
-function parseSchemaFields(schemaStr: string): { name: string; type: string; description: string }[] {
+interface SchemaNode {
+  name: string
+  type: string
+  description: string
+  properties?: SchemaNode[]
+  items?: SchemaNode
+}
+
+function parseJsonSchemaToNodes(schema: any, name: string = ""): SchemaNode {
+  const type = schema?.type || "string"
+  const description = schema?.description || ""
+  const node: SchemaNode = { name, type, description }
+
+  if (type === "object" && schema.properties) {
+    node.properties = Object.entries(schema.properties).map(([propName, propSchema]) => 
+      parseJsonSchemaToNodes(propSchema, propName)
+    )
+  } else if (type === "array" && schema.items) {
+    node.items = parseJsonSchemaToNodes(schema.items, "item")
+  }
+
+  return node
+}
+
+function serializeNodesToJsonSchema(node: SchemaNode): any {
+  const schema: any = { type: node.type }
+  if (node.description) {
+    schema.description = node.description
+  }
+
+  if (node.type === "object") {
+    const properties: Record<string, any> = {}
+    if (node.properties) {
+      for (const prop of node.properties) {
+        if (!prop.name.trim()) continue
+        properties[prop.name.trim()] = serializeNodesToJsonSchema(prop)
+      }
+    }
+    schema.properties = properties
+  } else if (node.type === "array") {
+    if (node.items) {
+      schema.items = serializeNodesToJsonSchema(node.items)
+    } else {
+      schema.items = { type: "string" }
+    }
+  }
+
+  return schema
+}
+
+function parseSchemaFields(schemaStr: string): SchemaNode[] {
   if (!schemaStr || schemaStr === "{}") return []
   try {
     const parsed = JSON.parse(schemaStr)
-    if (parsed?.properties && typeof parsed.properties === "object") {
-      return Object.entries(parsed.properties).map(([name, prop]) => ({
-        name,
-        type: (prop as Record<string, unknown>)?.type as string || "string",
-        description: (prop as Record<string, unknown>)?.description as string || ""
-      }))
+    if (parsed && typeof parsed === "object") {
+      if (parsed.properties) {
+        return Object.entries(parsed.properties).map(([name, schema]) => 
+          parseJsonSchemaToNodes(schema, name)
+        )
+      }
     }
   } catch { /* ignore */ }
   return []
 }
 
-/** Serialize field rows into a JSON Schema string for storage in node params. */
-function serializeSchemaFields(fields: { name: string; type: string; description: string }[]): string {
+function serializeSchemaFields(fields: SchemaNode[]): string {
   if (fields.length === 0) return "{}"
-  const properties: Record<string, { type: string; description?: string }> = {}
+  const properties: Record<string, any> = {}
   for (const f of fields) {
     if (!f.name.trim()) continue
-    const prop: { type: string; description?: string } = { type: f.type || "string" }
-    if (f.description.trim()) prop.description = f.description
-    properties[f.name.trim()] = prop
+    properties[f.name.trim()] = serializeNodesToJsonSchema(f)
   }
   return JSON.stringify({ type: "object", properties }, null, 2)
+}
+
+/** Recursive visual schema builder component row. */
+const SchemaNodeEditor = ({
+  node,
+  onChange,
+  onRemove,
+  level = 0
+}: {
+  node: SchemaNode
+  onChange: (updated: SchemaNode) => void
+  onRemove: () => void
+  level?: number
+}) => {
+  return (
+    <div className="space-y-1.5 p-2.5 border border-border rounded-md bg-muted/10 relative" style={{ marginLeft: `${level > 0 ? 12 : 0}px` }}>
+      <div className="flex gap-2 items-center">
+        <Input
+          value={node.name}
+          onChange={(e) => onChange({ ...node, name: e.target.value })}
+          className="rounded-none text-xs h-8 font-mono flex-1 bg-background"
+          placeholder={level === 0 ? "fieldName" : "childField"}
+          disabled={node.name === "item" && level > 0}
+        />
+        <select
+          value={node.type}
+          onChange={(e) => {
+            const newType = e.target.value
+            const updated: SchemaNode = { ...node, type: newType }
+            if (newType === "object") {
+              updated.properties = updated.properties || []
+              delete updated.items
+            } else if (newType === "array") {
+              updated.items = updated.items || { name: "item", type: "object", description: "Array item", properties: [] }
+              delete updated.properties
+            } else {
+              delete updated.properties
+              delete updated.items
+            }
+            onChange(updated)
+          }}
+          className="flex h-8 w-[95px] items-center justify-between border border-input bg-background px-2 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring text-foreground rounded-none"
+        >
+          <option value="string">string</option>
+          <option value="number">number</option>
+          <option value="boolean">boolean</option>
+          <option value="object">object</option>
+          <option value="array">array</option>
+        </select>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onRemove}
+          className="shrink-0 size-8 text-muted-foreground hover:text-destructive"
+        >
+          <Trash2Icon className="size-3" />
+        </Button>
+      </div>
+      <Input
+        value={node.description}
+        onChange={(e) => onChange({ ...node, description: e.target.value })}
+        className="rounded-none text-[10px] h-8 text-muted-foreground bg-background"
+        placeholder="Description (optional)"
+      />
+
+      {/* Children for Object type */}
+      {node.type === "object" && (
+        <div className="mt-2.5 space-y-2 border-l-2 border-primary/20 pl-3">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1">
+            <BracesIcon className="size-2.5" />
+            Properties of {node.name || "object"}:
+          </div>
+          {node.properties?.map((child, cIdx) => (
+            <SchemaNodeEditor
+              key={cIdx}
+              node={child}
+              onChange={(updatedChild) => {
+                const nextProps = [...(node.properties || [])]
+                nextProps[cIdx] = updatedChild
+                onChange({ ...node, properties: nextProps })
+              }}
+              onRemove={() => {
+                const nextProps = [...(node.properties || [])]
+                nextProps.splice(cIdx, 1)
+                onChange({ ...node, properties: nextProps })
+              }}
+              level={level + 1}
+            />
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const nextProps = [...(node.properties || []), { name: "", type: "string", description: "" }]
+              onChange({ ...node, properties: nextProps })
+            }}
+            className="w-full text-[10px] h-7 rounded-none border-dashed bg-background/50 hover:bg-background"
+          >
+            + Add Property to {node.name || "object"}
+          </Button>
+        </div>
+      )}
+
+      {/* Item for Array type */}
+      {node.type === "array" && node.items && (
+        <div className="mt-2.5 space-y-2 border-l-2 border-indigo-500/20 pl-3">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1">
+            <RepeatIcon className="size-2.5" />
+            Array Item Structure:
+          </div>
+          <SchemaNodeEditor
+            node={node.items}
+            onChange={(updatedItems) => {
+              onChange({ ...node, items: updatedItems })
+            }}
+            onRemove={() => {
+              onChange({ ...node, items: undefined })
+            }}
+            level={level + 1}
+          />
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** Visual schema builder for expected payload schemas (Trigger and LLM nodes). */
@@ -1230,13 +1454,13 @@ const SchemaBuilderSection = ({
   title?: string
 }) => {
   const [isRawMode, setIsRawMode] = React.useState(false)
-  const [fields, setFields] = React.useState<{ name: string; type: string; description: string }[]>(() =>
+  const [fields, setFields] = React.useState<SchemaNode[]>(() =>
     parseSchemaFields(selectedNode.data.params[paramKey] || "{}")
   )
   const [rawJson, setRawJson] = React.useState(() => selectedNode.data.params[paramKey] || "{}")
   const [schemaError, setSchemaError] = React.useState<string | null>(null)
 
-  const commitFields = (newFields: { name: string; type: string; description: string }[]) => {
+  const commitFields = (newFields: SchemaNode[]) => {
     setFields(newFields)
     const jsonStr = serializeSchemaFields(newFields)
     setRawJson(jsonStr)
@@ -1254,14 +1478,11 @@ const SchemaBuilderSection = ({
 
     try {
       const parsed = JSON.parse(val)
-      // Check if parsed has correct root format (at least valid JSON structure)
       if (typeof parsed !== "object" || parsed === null) {
         throw new Error("Schema must be a valid JSON Object")
       }
       setSchemaError(null)
-      // Update the actual node state
       updateNodeData({ params: { ...selectedNode.data.params, [paramKey]: JSON.stringify(parsed, null, 2) } })
-      // Sync fields in background
       setFields(parseSchemaFields(JSON.stringify(parsed)))
     } catch (err: unknown) {
       setSchemaError(err instanceof Error ? err.message : "Malformed JSON")
@@ -1270,18 +1491,15 @@ const SchemaBuilderSection = ({
 
   const toggleMode = (rawMode: boolean) => {
     if (!rawMode) {
-      // Switching to visual mode: populate flat fields from the raw schema (if valid)
       try {
         const parsed = JSON.parse(rawJson)
         setFields(parseSchemaFields(JSON.stringify(parsed)))
         setSchemaError(null)
       } catch (err: unknown) {
-        // If it was invalid, reset error or warn them
         setSchemaError("Cannot switch to visual mode with invalid JSON. Please fix errors first.")
         return
       }
     } else {
-      // Switching to raw mode: sync rawJson text area state with latest schema
       setRawJson(selectedNode.data.params[paramKey] || "{}")
     }
     setIsRawMode(rawMode)
@@ -1316,58 +1534,20 @@ const SchemaBuilderSection = ({
       {!isRawMode ? (
         <div className="space-y-3">
           {fields.map((field, idx) => (
-            <div key={idx} className="space-y-1.5 p-2.5 border border-border rounded-md bg-muted/10">
-              <div className="flex gap-2 items-center">
-                <Input
-                  value={field.name}
-                  onChange={(e) => {
-                    const next = [...fields]
-                    next[idx] = { ...next[idx], name: e.target.value }
-                    commitFields(next)
-                  }}
-                  className="rounded-none text-xs h-8 font-mono flex-1"
-                  placeholder="fieldName"
-                />
-                <select
-                  value={field.type}
-                  onChange={(e) => {
-                    const next = [...fields]
-                    next[idx] = { ...next[idx], type: e.target.value }
-                    commitFields(next)
-                  }}
-                  className="flex h-8 w-[90px] items-center justify-between border border-input bg-background px-2 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring text-foreground rounded-none"
-                >
-                  <option value="string">string</option>
-                  <option value="number">number</option>
-                  <option value="boolean">boolean</option>
-                  <option value="object">object</option>
-                  <option value="array">array</option>
-                </select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    const next = [...fields]
-                    next.splice(idx, 1)
-                    commitFields(next)
-                  }}
-                  className="shrink-0 size-8 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2Icon className="size-3" />
-                </Button>
-              </div>
-              <Input
-                value={field.description}
-                onChange={(e) => {
-                  const next = [...fields]
-                  next[idx] = { ...next[idx], description: e.target.value }
-                  commitFields(next)
-                }}
-                className="rounded-none text-[10px] h-8 text-muted-foreground"
-                placeholder="Description (optional)"
-              />
-            </div>
+            <SchemaNodeEditor
+              key={idx}
+              node={field}
+              onChange={(updatedField) => {
+                const next = [...fields]
+                next[idx] = updatedField
+                commitFields(next)
+              }}
+              onRemove={() => {
+                const next = [...fields]
+                next.splice(idx, 1)
+                commitFields(next)
+              }}
+            />
           ))}
 
           <Button
@@ -1558,6 +1738,12 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [showCreateModal, setShowCreateModal] = React.useState(false)
   const [newWorkflowName, setNewWorkflowName] = React.useState("")
   const [newWorkflowDescription, setNewWorkflowDescription] = React.useState("")
+  
+  // Code/JSON Modal states
+  const [showJsonModal, setShowJsonModal] = React.useState(false)
+  const [workflowJsonText, setWorkflowJsonText] = React.useState("")
+  const [jsonImportError, setJsonImportError] = React.useState<string | null>(null)
+  const [jsonCopied, setJsonCopied] = React.useState(false)
   
   // Search state for list
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -3434,6 +3620,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 </form>
               </div>
             )}
+
           </div>
         ) : (
           <>
@@ -3463,6 +3650,35 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => {
+                    const currentWorkflowJson = JSON.stringify({
+                      nodes: nodes.map(n => ({
+                        id: n.id,
+                        type: n.type,
+                        position: n.position,
+                        parentId: n.parentId,
+                        extent: n.extent,
+                        style: n.style,
+                        data: {
+                          label: n.data.label,
+                          type: n.data.type,
+                          params: n.data.params,
+                        }
+                      })),
+                      edges: edges
+                    }, null, 2);
+                    setWorkflowJsonText(currentWorkflowJson);
+                    setJsonImportError(null);
+                    setShowJsonModal(true);
+                  }}
+                  className="text-xs rounded-none font-semibold px-4 h-9 flex gap-1.5 items-center"
+                >
+                  <BracesIcon className="size-3.5" />
+                  Code / JSON
+                </Button>
                 <Button 
                   size="sm" 
                   variant="outline"
@@ -3950,9 +4166,63 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                                 e.dataTransfer.effectAllowed = "copy";
                               }}
                               className="text-[9px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1"
+                              title="Drag the entire current loop item: {{ $json }}"
                             >
                               <span className="font-mono font-bold">Current Item</span>
                             </div>
+
+                            {/* Loop item variable, e.g. {{ slide }} & {{ index }} */}
+                            {(() => {
+                              const loopNode = nodes.find(n => n.data.type === "loop")
+                              if (!loopNode) return null
+                              const itemName = loopNode.data.params.itemName || "item"
+                              return (
+                                <>
+                                  <div 
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData("text/plain", `{{ ${itemName} }}`);
+                                      e.dataTransfer.effectAllowed = "copy";
+                                    }}
+                                    className="text-[9px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1"
+                                    title={`Drag loop item variable: {{ ${itemName} }}`}
+                                  >
+                                    <span className="font-mono font-bold">{itemName}</span>
+                                  </div>
+                                  <div 
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData("text/plain", `{{ index }}`);
+                                      e.dataTransfer.effectAllowed = "copy";
+                                    }}
+                                    className="text-[9px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1"
+                                    title="Drag current loop index: {{ index }}"
+                                  >
+                                    <span className="font-mono font-bold">index</span>
+                                  </div>
+                                </>
+                              )
+                            })()}
+
+                            {/* Dynamically parsed fields of the current loop item */}
+                            {(() => {
+                              const loopNode = nodes.find(n => n.data.type === "loop")
+                              const itemName = loopNode?.data.params.itemName || "item"
+                              return getLoopFields(nodes, edges).map(f => (
+                                <div 
+                                  key={f.name}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData("text/plain", `{{ ${itemName}.${f.path} }}`);
+                                    e.dataTransfer.effectAllowed = "copy";
+                                  }}
+                                  className="text-[9px] cursor-grab active:cursor-grabbing hover:scale-105 transition-transform bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1"
+                                  title={`Drag loop item field: {{ ${itemName}.${f.name} }}`}
+                                >
+                                  <span className="font-mono font-bold">{itemName}.{f.name}</span>
+                                </div>
+                              ))
+                            })()}
                           </div>
                         </div>
                       )}
@@ -4857,6 +5127,93 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 className="text-xs h-9 px-4 font-bold"
               >
                 Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* JSON Code Modal Dialog */}
+      {showJsonModal && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowJsonModal(false)}>
+          <div 
+            className="bg-card border border-border shadow-2xl rounded-xl max-w-2xl w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Workflow JSON Code</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  View, copy, or paste/edit the complete JSON schema structure of your workflow.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(workflowJsonText)
+                    setJsonCopied(true)
+                    setTimeout(() => setJsonCopied(false), 2000)
+                  }}
+                  className="text-xs h-8 gap-1"
+                >
+                  {jsonCopied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}
+                  {jsonCopied ? "Copied" : "Copy JSON"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 flex flex-col space-y-2">
+              <Textarea
+                value={workflowJsonText}
+                onChange={(e) => {
+                  setWorkflowJsonText(e.target.value)
+                  setJsonImportError(null)
+                }}
+                className="flex-1 font-mono text-xs p-3 leading-relaxed border-border focus-visible:ring-1 bg-muted/20 min-h-[350px] resize-none"
+                placeholder="Paste your workflow JSON here..."
+              />
+              {jsonImportError && (
+                <p className="text-xs text-red-500 font-medium font-mono leading-tight p-2.5 bg-red-500/5 border border-red-500/20 rounded-md">
+                  ⚠️ {jsonImportError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end border-t pt-4 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowJsonModal(false)}
+                className="text-xs h-9 rounded-md"
+              >
+                Close
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  try {
+                    const parsed = JSON.parse(workflowJsonText)
+                    if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+                      throw new Error("Invalid format: JSON must contain 'nodes' and 'edges' arrays.")
+                    }
+                    const success = applyWorkflowJsonBlock(workflowJsonText)
+                    if (success) {
+                      setJsonImportError(null)
+                      setShowJsonModal(false)
+                      setLogs(prev => [...prev, { message: "[System] Successfully loaded workflow JSON code onto canvas! 🎉" }])
+                    } else {
+                      throw new Error("Failed to render nodes and edges onto the canvas.")
+                    }
+                  } catch (err: unknown) {
+                    setJsonImportError(err instanceof Error ? err.message : "Malformed or invalid Workflow JSON")
+                  }
+                }}
+                className="text-xs h-9 rounded-md font-bold"
+              >
+                Apply and Close
               </Button>
             </div>
           </div>
