@@ -1217,33 +1217,37 @@ function serializeSchemaFields(fields: { name: string; type: string; description
   return JSON.stringify({ type: "object", properties }, null, 2)
 }
 
-/** Visual schema builder for the trigger node's expected payload schema. */
+/** Visual schema builder for expected payload schemas (Trigger and LLM nodes). */
 const SchemaBuilderSection = ({
   selectedNode,
-  updateNodeData
+  updateNodeData,
+  paramKey = "inputSchema",
+  title = "Expected Payload Schema"
 }: {
   selectedNode: Node<NodeData>
   updateNodeData: (updatedFields: Partial<NodeData>) => void
+  paramKey?: "inputSchema" | "jsonSchema"
+  title?: string
 }) => {
   const [isRawMode, setIsRawMode] = React.useState(false)
   const [fields, setFields] = React.useState<{ name: string; type: string; description: string }[]>(() =>
-    parseSchemaFields(selectedNode.data.params.inputSchema || "{}")
+    parseSchemaFields(selectedNode.data.params[paramKey] || "{}")
   )
-  const [rawJson, setRawJson] = React.useState(() => selectedNode.data.params.inputSchema || "{}")
+  const [rawJson, setRawJson] = React.useState(() => selectedNode.data.params[paramKey] || "{}")
   const [schemaError, setSchemaError] = React.useState<string | null>(null)
 
   const commitFields = (newFields: { name: string; type: string; description: string }[]) => {
     setFields(newFields)
     const jsonStr = serializeSchemaFields(newFields)
     setRawJson(jsonStr)
-    updateNodeData({ params: { ...selectedNode.data.params, inputSchema: jsonStr } })
+    updateNodeData({ params: { ...selectedNode.data.params, [paramKey]: jsonStr } })
   }
 
   const handleRawChange = (val: string) => {
     setRawJson(val)
     if (!val.trim()) {
       setSchemaError(null)
-      updateNodeData({ params: { ...selectedNode.data.params, inputSchema: "{}" } })
+      updateNodeData({ params: { ...selectedNode.data.params, [paramKey]: "{}" } })
       setFields([])
       return
     }
@@ -1256,7 +1260,7 @@ const SchemaBuilderSection = ({
       }
       setSchemaError(null)
       // Update the actual node state
-      updateNodeData({ params: { ...selectedNode.data.params, inputSchema: JSON.stringify(parsed, null, 2) } })
+      updateNodeData({ params: { ...selectedNode.data.params, [paramKey]: JSON.stringify(parsed, null, 2) } })
       // Sync fields in background
       setFields(parseSchemaFields(JSON.stringify(parsed)))
     } catch (err: unknown) {
@@ -1277,8 +1281,8 @@ const SchemaBuilderSection = ({
         return
       }
     } else {
-      // Switching to raw mode: sync rawJson text area state with latest inputSchema
-      setRawJson(selectedNode.data.params.inputSchema || "{}")
+      // Switching to raw mode: sync rawJson text area state with latest schema
+      setRawJson(selectedNode.data.params[paramKey] || "{}")
     }
     setIsRawMode(rawMode)
   }
@@ -1286,7 +1290,7 @@ const SchemaBuilderSection = ({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between border-b pb-2">
-        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Expected Payload Schema</Label>
+        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{title}</Label>
         <div className="flex gap-1.5 bg-muted p-0.5 rounded border border-border">
           <button
             type="button"
@@ -1406,7 +1410,7 @@ const SchemaBuilderSection = ({
             Preview JSON Schema
           </summary>
           <pre className="font-mono bg-muted/30 border border-border p-3 rounded-md overflow-x-auto mt-2">
-            {selectedNode.data.params.inputSchema || "{}"}
+            {selectedNode.data.params[paramKey] || "{}"}
           </pre>
         </details>
       )}
@@ -4580,15 +4584,13 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                       </select>
                     </div>
                     {selectedNode.data.params.responseFormat === "json_object" && (
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">JSON Schema (Optional)</Label>
-                        <Textarea 
-                          value={selectedNode.data.params.jsonSchema || ""}
-                          onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, jsonSchema: e.target.value } })}
-                          className="rounded-none text-xs min-h-[120px] font-mono resize-none"
-                          placeholder='{"type":"object","properties":{}}'
-                        />
-                      </div>
+                      <SchemaBuilderSection 
+                        key={selectedNode.id} 
+                        selectedNode={selectedNode} 
+                        updateNodeData={updateNodeData} 
+                        paramKey="jsonSchema" 
+                        title="Structured JSON Schema" 
+                      />
                     )}
                   </>
                 )}
