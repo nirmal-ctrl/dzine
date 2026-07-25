@@ -2878,18 +2878,26 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const parts: any[] = [{ text: resolvedParams.prompt || "" }];
             if (resolvedParams.referenceImage) {
-              // Clean any leading/trailing quotes, newlines, and whitespaces
-              let refImage = resolvedParams.referenceImage.trim().replace(/^["']|["']$/g, "").trim();
-              const matches = refImage.match(/^data:(image\/\w+);base64,(.*)$/);
-              if (matches && matches.length === 3) {
-                // Ensure data has absolutely no whitespaces, newlines, quotes, or backslashes
-                const cleanedData = matches[2].replace(/[\s"'\\]/g, "");
+              const refStr = resolvedParams.referenceImage;
+              const regex = /data:(image\/\w+);base64,([A-Za-z0-9+/]+={0,2})/g;
+              let lastIndex = 0;
+              let match;
+              while ((match = regex.exec(refStr)) !== null) {
+                const textPart = refStr.slice(lastIndex, match.index).trim();
+                if (textPart) {
+                  parts.push({ text: textPart });
+                }
                 parts.push({
                   inlineData: {
-                    mimeType: matches[1],
-                    data: cleanedData
+                    mimeType: match[1],
+                    data: match[2]
                   }
                 });
+                lastIndex = regex.lastIndex;
+              }
+              const remainingText = refStr.slice(lastIndex).trim();
+              if (remainingText) {
+                parts.push({ text: remainingText });
               }
             }
 
@@ -2912,6 +2920,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               }
             };
           }
+
+          // Add detailed logging
+          console.log(`[Image Gen Node] Execution started for node ${node.id}`);
+          console.log(`[Image Gen Node] Target URL:`, targetUrl);
+          console.log(`[Image Gen Node] Payload:`, JSON.stringify(payload, null, 2));
 
           // Call the server-side proxy which secures/injects the API key if missing
           const res = await fetch("/api/workflows/proxy", {
@@ -2973,12 +2986,13 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           nodeOutputs[node.id] = { imageUrl: generatedImageUrls[0], imageUrls: generatedImageUrls, aspectRatio: resolvedParams.aspectRatio || "1:1" };
           markNodeSuccess(nodeOutputs[node.id], msg);
         } catch(err: unknown) {
+          console.error(`[Image Gen Node] Execution failed for node ${node.id}:`, err);
           msg += `\n⚠ Image Gen Error: ${err instanceof Error ? err.message : String(err)}`;
           nodeOutputs[node.id] = { error: err instanceof Error ? err.message : String(err) };
           setNodes(prev => prev.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: "error" as const } } : n));
           setLogs(prev => {
             const newLogs = [...prev];
-            newLogs[newLogs.length - 1] = { ...newLogs[newLogs.length - 1], status: "error", message: msg, data: { error: err instanceof Error ? err.message : String(err) } };
+            newLogs[newLogs.length - 1] = { ...newLogs[newLogs.length - 1], status: "error", message: msg, data: { error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } };
             return newLogs;
           });
           break; // stop execution
@@ -3497,18 +3511,26 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   const parts: any[] = [{ text: subResolved.prompt || "" }];
                   if (subResolved.referenceImage) {
-                    // Clean any leading/trailing quotes, newlines, and whitespaces
-                    let refImage = subResolved.referenceImage.trim().replace(/^["']|["']$/g, "").trim();
-                    const matches = refImage.match(/^data:(image\/\w+);base64,(.*)$/);
-                    if (matches && matches.length === 3) {
-                      // Ensure data has absolutely no whitespaces, newlines, quotes, or backslashes
-                      const cleanedData = matches[2].replace(/[\s"'\\]/g, "");
+                    const refStr = subResolved.referenceImage;
+                    const regex = /data:(image\/\w+);base64,([A-Za-z0-9+/]+={0,2})/g;
+                    let lastIndex = 0;
+                    let match;
+                    while ((match = regex.exec(refStr)) !== null) {
+                      const textPart = refStr.slice(lastIndex, match.index).trim();
+                      if (textPart) {
+                        parts.push({ text: textPart });
+                      }
                       parts.push({
                         inlineData: {
-                          mimeType: matches[1],
-                          data: cleanedData
+                          mimeType: match[1],
+                          data: match[2]
                         }
                       });
+                      lastIndex = regex.lastIndex;
+                    }
+                    const remainingText = refStr.slice(lastIndex).trim();
+                    if (remainingText) {
+                      parts.push({ text: remainingText });
                     }
                   }
 
@@ -3531,6 +3553,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     }
                   };
                 }
+
+                // Add detailed logging
+                console.log(`[Image Gen Loop Node] Execution started for subnode ${subNode.id}`);
+                console.log(`[Image Gen Loop Node] Target URL:`, targetUrl);
+                console.log(`[Image Gen Loop Node] Payload:`, JSON.stringify(payload, null, 2));
 
                 const res = await fetch("/api/workflows/proxy", {
                   method: "POST",
@@ -3611,6 +3638,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               
               markSubNodeSuccess(localNodeOutputs[subNode.id])
             } catch (err: unknown) {
+              console.error(`[Image Gen Loop Node] Execution failed for subnode ${subNode.id}:`, err);
               const errMsg = err instanceof Error ? err.message : String(err);
               localNodeOutputs[subNode.id] = { error: errMsg };
               setNodes(prev => prev.map(n => n.id === subNode.id ? {
@@ -3621,7 +3649,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 ...log,
                 status: "error",
                 message: `${log.message}\n⚠️ Error: ${errMsg}`,
-                data: { error: errMsg }
+                data: { error: errMsg, stack: err instanceof Error ? err.stack : undefined }
               } : log))
               throw err; // propagate to loop node
             }

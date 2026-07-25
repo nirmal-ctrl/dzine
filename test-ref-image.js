@@ -1,23 +1,23 @@
-const API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-
-// 1x1 transparent png
-const base64Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-
-fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-pro:generateContent?key=${API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-        contents: [{ 
-            parts: [
-                { text: "A futuristic cybernetic interface with purple lights" },
-                { inlineData: { mimeType: "image/png", data: base64Image } }
-            ] 
-        }],
-        generationConfig: {
-            responseModalities: ["IMAGE"],
-            candidateCount: 1
-        }
-    })
-}).then(res => res.json()).then(data => {
-    console.log(JSON.stringify(data, null, 2).slice(0, 1000));
-}).catch(console.error);
+const refStr = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=for logo refer: data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBD";
+const parts = [];
+const regex = /data:(image\/\w+);base64,([A-Za-z0-9+/]+={0,2})/g;
+let lastIndex = 0;
+let match;
+while ((match = regex.exec(refStr)) !== null) {
+  const textPart = refStr.slice(lastIndex, match.index).trim();
+  if (textPart) {
+    parts.push({ text: textPart });
+  }
+  parts.push({
+    inlineData: {
+      mimeType: match[1],
+      data: match[2]
+    }
+  });
+  lastIndex = regex.lastIndex;
+}
+const remainingText = refStr.slice(lastIndex).trim();
+if (remainingText) {
+  parts.push({ text: remainingText });
+}
+console.log(JSON.stringify(parts, null, 2));
