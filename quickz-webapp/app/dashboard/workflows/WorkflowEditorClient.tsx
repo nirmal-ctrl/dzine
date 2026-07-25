@@ -2878,12 +2878,16 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const parts: any[] = [{ text: resolvedParams.prompt || "" }];
             if (resolvedParams.referenceImage) {
-              const matches = resolvedParams.referenceImage.match(/^data:(image\/\w+);base64,(.*)$/);
+              // Clean any leading/trailing quotes, newlines, and whitespaces
+              let refImage = resolvedParams.referenceImage.trim().replace(/^["']|["']$/g, "").trim();
+              const matches = refImage.match(/^data:(image\/\w+);base64,(.*)$/);
               if (matches && matches.length === 3) {
+                // Ensure data has absolutely no whitespaces, newlines, quotes, or backslashes
+                const cleanedData = matches[2].replace(/[\s"'\\]/g, "");
                 parts.push({
                   inlineData: {
                     mimeType: matches[1],
-                    data: matches[2]
+                    data: cleanedData
                   }
                 });
               }
@@ -3493,12 +3497,16 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   const parts: any[] = [{ text: subResolved.prompt || "" }];
                   if (subResolved.referenceImage) {
-                    const matches = subResolved.referenceImage.match(/^data:(image\/\w+);base64,(.*)$/);
+                    // Clean any leading/trailing quotes, newlines, and whitespaces
+                    let refImage = subResolved.referenceImage.trim().replace(/^["']|["']$/g, "").trim();
+                    const matches = refImage.match(/^data:(image\/\w+);base64,(.*)$/);
                     if (matches && matches.length === 3) {
+                      // Ensure data has absolutely no whitespaces, newlines, quotes, or backslashes
+                      const cleanedData = matches[2].replace(/[\s"'\\]/g, "");
                       parts.push({
                         inlineData: {
                           mimeType: matches[1],
-                          data: matches[2]
+                          data: cleanedData
                         }
                       });
                     }
