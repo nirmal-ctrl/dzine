@@ -12,7 +12,13 @@ export async function POST(req: Request) {
 
   const ai = new GoogleGenAI({ apiKey });
   try {
-    const { prompt, activeNodes = [] } = await req.json();
+    const { prompt, activeNodes = [], activeEdges = [], modelId } = await req.json();
+
+    // This route is backed by the server's Google key, so it can only serve Gemini
+    // models. Honor the client's model pick when it's a Gemini model, else default.
+    const builderModel = typeof modelId === "string" && /^gemini/i.test(modelId.trim())
+      ? modelId.trim()
+      : "gemini-3.1-pro-preview";
 
     const systemPrompt = `You are a workflow builder assistant. The user will describe a workflow in natural language and you will return a JSON object representing that workflow.
 
@@ -133,13 +139,16 @@ Respond ONLY with a raw JSON object: no markdown, no explanation, no code fences
 - **Create**: If no current canvas is provided, build a brand-new workflow from scratch. Every workflow MUST end with an "output" node that defines the final result.
 - **Modify**: If a current canvas is provided (see below), you MUST base your response on it. Preserve every node and edge the user did not ask to change. Return the *complete* updated workflow, every node and every edge, not just the delta.
 
-Current active nodes on canvas:
-${JSON.stringify(activeNodes, null, 2)}`;
+Current active nodes on canvas (with full params — preserve these exactly unless the user asks to change them):
+${JSON.stringify(activeNodes, null, 2)}
+
+Current active edges on canvas:
+${JSON.stringify(activeEdges, null, 2)}`;
 
     const fullPrompt = `${systemPrompt}\n\nUser Request: ${prompt}`;
 
     const streamResponse = await ai.interactions.create({
-      model: "gemini-3.1-pro-preview",
+      model: builderModel,
       input: fullPrompt,
       stream: true,
       generation_config: {

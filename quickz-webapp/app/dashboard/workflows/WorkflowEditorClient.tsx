@@ -90,7 +90,8 @@ import {
   CopyIcon,
   CheckIcon,
   WorkflowIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  XIcon
 } from "lucide-react"
 
 // Dynamic nodes typing & parameters
@@ -184,7 +185,7 @@ const AVAILABLE_TILES: AvailableTile[] = [
   { name: "Delay", description: "Pause execution for a fixed duration in milliseconds", type: "delay", icon: <ClockIcon className="size-4 text-white" />, color: "stone", defaultParams: { ms: "2000" } },
   { name: "LLM Node", description: "Advanced LLM — customize provider, model, structured outputs & instructions", type: "llm", icon: <BrainCircuitIcon className="size-4 text-white" />, color: "violet", defaultParams: { provider: "openai", model: "gpt-4o-mini", apiKey: "", prompt: "Generate the deck content...", temperature: "0.7", responseFormat: "text", jsonSchema: "" } },
   { name: "Image Gen", description: "AI image generation with aspect ratio, resolution & style reference support", type: "image-gen", icon: <ImageIcon className="size-4 text-white" />, color: "rose", defaultParams: { apiKey: "", model: "gemini-3.1-flash-image", prompt: "A hyper-realistic corporate mascot logo", aspectRatio: "1:1", numberOfImages: "1", imageSize: "1K", personGeneration: "dont_allow", referenceImage: "", temperature: "", topP: "" } },
-  { name: "HTTP Request", description: "Call any REST API — GET, POST, PUT, DELETE with JSON body", type: "http-request", icon: <GlobeIcon className="size-4 text-white" />, color: "sky", defaultParams: { url: "https://api.example.com", method: "GET", body: "{}" } },
+  { name: "HTTP Request", description: "Call any REST API — GET, POST, PUT, DELETE with JSON body", type: "http-request", icon: <GlobeIcon className="size-4 text-white" />, color: "sky", defaultParams: { url: "https://api.example.com", method: "GET", headers: "{}", body: "{}" } },
   { name: "Script", description: "Run custom JavaScript to transform or filter workflow data", type: "script", icon: <Code2Icon className="size-4 text-white" />, color: "red", defaultParams: { code: "return data.map(item => ({ ...item, processed: true }));" } },
   { name: "Output", description: "Terminal sink — aggregates results and returns the final workflow payload", type: "output", icon: <SquareArrowOutUpRightIcon className="size-4 text-white" />, color: "emerald", defaultParams: { outputKey: "result", format: "json" } },
   { name: "Iterator / Loop", description: "Iterate over an array — run nested nodes for each item in parallel or sequentially (loop mode)", type: "loop", icon: <RepeatIcon className="size-4 text-white" />, color: "indigo", defaultParams: { arrayPath: "$.slides", itemName: "slide", mode: "parallel" } },
@@ -490,7 +491,10 @@ function getStaticNodeFields(nodeId: string, allNodes: Node<NodeData>[]): { name
 
 function parseValueToHtml(val: string, nodes: Node<NodeData>[]) {
   if (!val) return "";
-  let escaped = val.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
+  // Escape HTML entities first so user text can never inject markup into innerHTML.
+  // (Built via concatenation to keep the entities literal in source.)
+  const ENT_AMP = "&" + "amp;", ENT_LT = "&" + "lt;", ENT_GT = "&" + "gt;";
+  let escaped = val.replace(/&/g, ENT_AMP).replace(/</g, ENT_LT).replace(/>/g, ENT_GT);
   escaped = escaped.replace(/\n/g, "<br>");
   
   return escaped.replace(/\{\{\s*(.*?)\s*\}\}/g, (match, inner) => {
@@ -977,7 +981,7 @@ interface WorkflowEditorClientProps {
 // Scans string values for n8n style {{ $json.field }} and {{ $node["id"].json.field }}
 // and replaces them with actual values from the node output registry.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function resolveTemplate(text: string, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }): string {
+function resolveTemplate(text: string, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }, currentNodeId?: string, edges?: Edge[]): string {
   if (typeof text !== "string") {
     if (text === null || text === undefined) return ""
     text = String(text)
@@ -1019,9 +1023,18 @@ function resolveTemplate(text: string, registry: Record<string, any>, loopCtx?: 
 
     // Support $json.field (from current context / upstream item)
     if (path.startsWith("$json")) {
-      let baseVal = loopCtx?.item
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let baseVal: any = undefined;
+      
+      if (currentNodeId && edges) {
+        const upstreamIds = getUpstreamNodeIds(edges, currentNodeId)
+        if (upstreamIds.length > 0) {
+          baseVal = registry[upstreamIds[0]]
+        }
+      }
+      
       if (!baseVal) {
-        // Fallback: grab the last upstream node's output if no explicit item context
+        // Fallback: grab the last upstream node's output
         const keys = Object.keys(registry)
         if (keys.length > 0) {
           const lastOutput = registry[keys[keys.length - 1]]
@@ -1030,9 +1043,15 @@ function resolveTemplate(text: string, registry: Record<string, any>, loopCtx?: 
           } else {
             baseVal = lastOutput
           }
+        } else if (loopCtx?.item) {
+          baseVal = loopCtx.item
         }
-      } else {
-        if (baseVal.json) baseVal = baseVal.json
+      }
+
+      if (Array.isArray(baseVal) && baseVal[0]?.json) {
+        baseVal = baseVal[0].json
+      } else if (baseVal && typeof baseVal === "object" && baseVal.json) {
+        baseVal = baseVal.json
       }
       
       if (path === "$json") {
@@ -1091,7 +1110,7 @@ function resolveTemplate(text: string, registry: Record<string, any>, loopCtx?: 
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function resolveRawTemplate(text: string, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }): any {
+function resolveRawTemplate(text: string, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }, currentNodeId?: string, edges?: Edge[]): any {
   if (typeof text !== "string") return text;
   
   const trimmed = text.trim();
@@ -1129,8 +1148,18 @@ function resolveRawTemplate(text: string, registry: Record<string, any>, loopCtx
 
     // Support $json.field
     if (path.startsWith("$json")) {
-      let baseVal = loopCtx?.item
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let baseVal: any = undefined;
+      
+      if (currentNodeId && edges) {
+        const upstreamIds = getUpstreamNodeIds(edges, currentNodeId)
+        if (upstreamIds.length > 0) {
+          baseVal = registry[upstreamIds[0]]
+        }
+      }
+      
       if (!baseVal) {
+        // Fallback: grab the last upstream node's output
         const keys = Object.keys(registry)
         if (keys.length > 0) {
           const lastOutput = registry[keys[keys.length - 1]]
@@ -1139,9 +1168,15 @@ function resolveRawTemplate(text: string, registry: Record<string, any>, loopCtx
           } else {
             baseVal = lastOutput
           }
+        } else if (loopCtx?.item) {
+          baseVal = loopCtx.item
         }
-      } else {
-        if (baseVal.json) baseVal = baseVal.json
+      }
+
+      if (Array.isArray(baseVal) && baseVal[0]?.json) {
+        baseVal = baseVal[0].json
+      } else if (baseVal && typeof baseVal === "object" && baseVal.json) {
+        baseVal = baseVal.json
       }
       
       if (path === "$json") return baseVal;
@@ -1179,14 +1214,14 @@ function resolveRawTemplate(text: string, registry: Record<string, any>, loopCtx
   }
   
   // Otherwise fallback to standard string interpolation
-  return resolveTemplate(text, registry, loopCtx);
+  return resolveTemplate(text, registry, loopCtx, currentNodeId, edges);
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function resolveParams(params: Record<string, string>, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }): Record<string, string> {
+function resolveParams(params: Record<string, string>, registry: Record<string, any>, loopCtx?: { item: any; index: number; itemName?: string }, currentNodeId?: string, edges?: Edge[]): Record<string, string> {
   const resolved: Record<string, string> = {}
   for (const [key, value] of Object.entries(params)) {
-    resolved[key] = resolveTemplate(value, registry, loopCtx)
+    resolved[key] = resolveTemplate(value, registry, loopCtx, currentNodeId, edges)
   }
   return resolved
 }
@@ -1770,15 +1805,19 @@ function cleanJsonString(str: string): string {
 function topologicalSort(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
   const adj = new Map<string, string[]>()
   const inDegree = new Map<string, number>()
+  const nodeIds = new Set(nodes.map(n => n.id))
+  
   for (const n of nodes) {
     adj.set(n.id, [])
     inDegree.set(n.id, 0)
   }
   for (const e of edges) {
-    const existing = adj.get(e.source) || []
-    existing.push(e.target)
-    adj.set(e.source, existing)
-    inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1)
+    if (nodeIds.has(e.source) && nodeIds.has(e.target)) {
+      const existing = adj.get(e.source) || []
+      existing.push(e.target)
+      adj.set(e.source, existing)
+      inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1)
+    }
   }
   const queue: string[] = []
   for (const [id, deg] of inDegree.entries()) {
@@ -1824,6 +1863,65 @@ function getDownstreamNodes(nodeId: string, allNodes: Node<NodeData>[], edges: E
   return allNodes.filter(n => visited.has(n.id))
 }
 
+/** Generate a collision-resistant node/group id (Date.now + random suffix). */
+function generateNodeId(prefix: "node" | "group" = "node"): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** Parse a scalar literal (string/number/boolean/null) from a condition fragment. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseConditionLiteral(raw: string): any {
+  const s = raw.trim()
+  if (/^true$/i.test(s)) return true
+  if (/^false$/i.test(s)) return false
+  if (/^null$/i.test(s)) return null
+  if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) return s.slice(1, -1)
+  if (s !== "" && !isNaN(Number(s))) return Number(s)
+  return s
+}
+
+/**
+ * Evaluate a resolved condition expression to a boolean.
+ * First attempts a strict JS evaluation (same trust level as the Script node — it runs
+ * client-side on the user's own input), then falls back to a simple left/operator/right
+ * comparison so unquoted values like `active === 'active'` still work.
+ */
+function evaluateCondition(condition: string): boolean {
+  const expr = (condition || "").trim()
+  if (!expr) return false
+  if (/^true$/i.test(expr)) return true
+  if (/^false$/i.test(expr)) return false
+
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(`"use strict"; return (${expr});`)
+    return Boolean(fn())
+  } catch {
+    // fall through to simple comparison parsing
+  }
+
+  const m = expr.match(/^(.*?)\s*(===|!==|==|!=|>=|<=|>|<)\s*(.*)$/)
+  if (m) {
+    const left = parseConditionLiteral(m[1])
+    const right = parseConditionLiteral(m[3])
+    switch (m[2]) {
+      case "===": return left === right
+      case "!==": return left !== right
+      // eslint-disable-next-line eqeqeq
+      case "==": return left == right
+      // eslint-disable-next-line eqeqeq
+      case "!=": return left != right
+      case ">": return Number(left) > Number(right)
+      case "<": return Number(left) < Number(right)
+      case ">=": return Number(left) >= Number(right)
+      case "<=": return Number(left) <= Number(right)
+    }
+  }
+  // Truthiness of the raw resolved value
+  const lower = expr.toLowerCase()
+  return lower !== "0" && lower !== "false" && lower !== "null" && lower !== "undefined" && lower !== "nan"
+}
+
 export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -1834,6 +1932,8 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [activeWorkflowId, setActiveWorkflowId] = React.useState<string | null>(null)
   const [loadingWorkflows, setLoadingWorkflows] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
+  const [saveState, setSaveState] = React.useState<"idle" | "saved" | "error">("idle")
+  const [isDirty, setIsDirty] = React.useState(false)
   const [workflowName, setWorkflowName] = React.useState("")
   const [workflowDescription, setWorkflowDescription] = React.useState("")
   
@@ -1891,8 +1991,25 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         const dbNodes = data.nodes || []
         const dbEdges = data.edges || []
         
+        // Deduplicate loaded nodes and edges by id
+        const uniqueNodesMap = new Map<string, any>()
+        dbNodes.forEach((n: any) => {
+          if (n && n.id) {
+            uniqueNodesMap.set(n.id, n)
+          }
+        })
+        const uniqueDbNodes = Array.from(uniqueNodesMap.values())
+
+        const uniqueEdgesMap = new Map<string, any>()
+        dbEdges.forEach((e: any) => {
+          if (e && e.id) {
+            uniqueEdgesMap.set(e.id, e)
+          }
+        })
+        const uniqueDbEdges = Array.from(uniqueEdgesMap.values())
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rehydratedNodes = dbNodes.map((n: any) => {
+        const rehydratedNodes = uniqueDbNodes.map((n: any) => {
           const tile = AVAILABLE_TILES.find(t => t.type === n.data.type)
           return {
             ...n,
@@ -1906,12 +2023,18 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         })
         
         setNodes(rehydratedNodes)
-        setEdges(dbEdges)
+        setEdges(uniqueDbEdges)
         setLogs([])
         setSelectedNode(null)
         setSelectedEdge(null)
         setIsSheetOpen(false)
         setIsRunSheetOpen(false)
+        setRunInputData({})
+        setExpectedInputs([])
+        setIsAwaitingInputs(false)
+        setCollapsedLogs({})
+        setIsDirty(false)
+        setSaveState("idle")
       }
     } catch (err) {
       console.error("Failed to load workflow:", err)
@@ -2006,9 +2129,15 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
       if (res.ok) {
         fetchWorkflows()
+        setIsDirty(false)
+        setSaveState("saved")
+        setTimeout(() => setSaveState("idle"), 2000)
+      } else {
+        setSaveState("error")
       }
     } catch (err) {
       console.error("Failed to save workflow:", err)
+      setSaveState("error")
     } finally {
       setSaving(false)
     }
@@ -2059,6 +2188,18 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [chatMessages, isChatStreaming])
 
+  // Warn before leaving the page with unsaved changes
+  React.useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ""
+      }
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [isDirty])
+
   const onNodeClick = React.useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedEdge(null)
     setSelectedNode(node as Node<NodeData>)
@@ -2076,7 +2217,24 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     const parsed = JSON.parse(jsonText)
     if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) return false
 
-    const loadedNodes = parsed.nodes.map((n: { id: string; type: string; position: { x: number; y: number }; data: { label: string; type: NodeType; params: Record<string, string> } }) => {
+    // Deduplicate nodes and edges by id
+    const uniqueNodesMap = new Map<string, any>()
+    parsed.nodes.forEach((n: any) => {
+      if (n && n.id) {
+        uniqueNodesMap.set(n.id, n)
+      }
+    })
+    const uniqueIncomingNodes = Array.from(uniqueNodesMap.values())
+
+    const uniqueEdgesMap = new Map<string, any>()
+    parsed.edges.forEach((e: any) => {
+      if (e && e.id) {
+        uniqueEdgesMap.set(e.id, e)
+      }
+    })
+    const uniqueIncomingEdges = Array.from(uniqueEdgesMap.values())
+
+    const loadedNodes = uniqueIncomingNodes.map((n: { id: string; type: string; position: { x: number; y: number }; data: { label: string; type: NodeType; params: Record<string, string> } }) => {
       let icon = <ZapIcon className="size-4 text-white" />
       let color = "slate"
       if (n.data.type === "delay") {
@@ -2130,7 +2288,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       }
     })
 
-    const loadedEdges = parsed.edges.map((e: { id: string; source: string; target: string }) => ({
+    const loadedEdges = uniqueIncomingEdges.map((e: { id: string; source: string; target: string }) => ({
       ...e,
       markerEnd: { type: MarkerType.ArrowClosed },
       style: { strokeWidth: 2 },
@@ -2139,6 +2297,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
     setNodes(loadedNodes)
     setEdges(loadedEdges)
+    setIsDirty(true)
     return true
   }, [setNodes, setEdges])
 
@@ -2149,10 +2308,12 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const extractedEdges: any[] = []
     
-    // Fast path: find node objects manually by walking braces
-    const nodeRegex = /{\s*"id"\s*:\s*"node-[^"]+"/g
+    // Generic pass: find every balanced JSON object containing an "id" field, then
+    // classify it as an edge (has source+target) or a node. This is resilient to any
+    // id format the model emits (node-1, trigger-a, generated uuids, ...).
+    const idRegex = /{\s*"id"\s*:\s*"[^"]+"/g
     let match
-    while ((match = nodeRegex.exec(str)) !== null) {
+    while ((match = idRegex.exec(str)) !== null) {
       const start = match.index
       let braces = 0
       let end = -1
@@ -2175,39 +2336,40 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         }
       }
       if (end !== -1) {
-        try { extractedNodes.push(JSON.parse(str.substring(start, end))) } catch (e) {}
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const parsed: any = JSON.parse(str.substring(start, end))
+          if (parsed && typeof parsed.id === "string") {
+            if (parsed.source && parsed.target) {
+              extractedEdges.push(parsed)
+            } else if (parsed.data || parsed.position || parsed.type) {
+              extractedNodes.push(parsed)
+            }
+          }
+        } catch (e) {}
       }
     }
 
-    const edgeRegex = /{\s*"id"\s*:\s*"edge-[^"]+"/g
-    while ((match = edgeRegex.exec(str)) !== null) {
-      const start = match.index
-      let braces = 0
-      let end = -1
-      let inString = false
-      let escape = false
-      for (let i = start; i < str.length; i++) {
-        const char = str[i]
-        if (escape) { escape = false; continue; }
-        if (char === '\\') { escape = true; continue; }
-        if (char === '"') { inString = !inString; continue; }
-        if (!inString) {
-          if (char === '{') braces++
-          else if (char === '}') {
-            braces--
-            if (braces === 0) {
-              end = i + 1
-              break
-            }
-          }
-        }
+    // Deduplicate extracted nodes and edges by id
+    const uniqueNodes: any[] = []
+    const seenNodeIds = new Set<string>()
+    for (const node of extractedNodes) {
+      if (node && node.id && !seenNodeIds.has(node.id)) {
+        seenNodeIds.add(node.id)
+        uniqueNodes.push(node)
       }
-      if (end !== -1) {
-        try { extractedEdges.push(JSON.parse(str.substring(start, end))) } catch (e) {}
+    }
+
+    const uniqueEdges: any[] = []
+    const seenEdgeIds = new Set<string>()
+    for (const edge of extractedEdges) {
+      if (edge && edge.id && !seenEdgeIds.has(edge.id)) {
+        seenEdgeIds.add(edge.id)
+        uniqueEdges.push(edge)
       }
     }
     
-    return { nodes: extractedNodes, edges: extractedEdges }
+    return { nodes: uniqueNodes, edges: uniqueEdges }
   }, [])
 
   const submitChatQuery = async (queryText: string) => {
@@ -2226,7 +2388,21 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           prompt: queryText,
           provider: settings.activeProvider,
           modelId: settings.models[settings.activeProvider],
-          activeNodes: nodes.map(n => ({ id: n.id, type: n.data.type }))
+          // Send the FULL canvas context (params + edges) so Modify mode can actually
+          // preserve everything the user didn't ask to change
+          activeNodes: nodes.map(n => ({
+            id: n.id,
+            type: n.data.type,
+            label: n.data.label,
+            position: n.position,
+            params: n.data.params,
+          })),
+          activeEdges: edges.map(e => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle ?? undefined,
+          }))
         })
       })
 
@@ -2349,6 +2525,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
   const updateNodeData = (updatedFields: Partial<NodeData>) => {
     if (!selectedNode) return
+    setIsDirty(true)
     setNodes(prev => prev.map(n => {
       if (n.id === selectedNode.id) {
         const updatedNode = {
@@ -2372,6 +2549,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const groupSelectedNodes = React.useCallback(() => {
     const selected = nodes.filter(n => n.selected && n.type !== "group" && n.data.type !== "group" && !n.parentId)
     if (selected.length < 1) return
+    setIsDirty(true)
 
     let minX = Infinity
     let minY = Infinity
@@ -2396,7 +2574,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     maxX += padding
     maxY += padding
 
-    const groupId = `group-${nodes.length + 1}`
+    const groupId = generateNodeId("group")
     
     const newGroupNode: Node<NodeData> = {
       id: groupId,
@@ -2437,6 +2615,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     const selectedGroups = nodes.filter(n => n.selected && (n.type === "group" || n.data.type === "group"))
     
     if (selectedGroups.length === 0) return
+    setIsDirty(true)
 
     setNodes(prev => {
       let nextNodes = [...prev]
@@ -2466,6 +2645,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   }, [nodes, setNodes])
 
   const deleteSelectedElement = () => {
+    setIsDirty(true)
     if (selectedNode) {
       setNodes(prev => prev.filter(n => n.id !== selectedNode.id))
       setEdges(prev => prev.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id))
@@ -2482,23 +2662,47 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   // Default load disabled on initial render. ReactFlow is populated by loadWorkflow inside dashboard/workflows list.
 
   const onConnect = React.useCallback(
-    (params: Connection | Edge) => setEdges((eds) => addEdge({ 
-      ...params, 
-      markerEnd: { type: MarkerType.ArrowClosed },
-      style: { strokeWidth: 2 },
-      interactionWidth: 20
-    }, eds)),
+    (params: Connection | Edge) => {
+      setIsDirty(true)
+      setEdges((eds) => addEdge({
+        ...params,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { strokeWidth: 2 },
+        interactionWidth: 20
+      }, eds))
+    },
     [setEdges]
   )
 
   const onEdgeUpdate = React.useCallback(
-    (oldEdge: Edge, newConnection: Connection) => setEdges((els) => updateEdge(oldEdge, newConnection, els)),
+    (oldEdge: Edge, newConnection: Connection) => {
+      setIsDirty(true)
+      setEdges((els) => updateEdge(oldEdge, newConnection, els))
+    },
     [setEdges]
+  )
+
+  // Wrap React Flow change handlers to track unsaved changes (ignoring pure selection/highlight changes)
+  const handleNodesChange = React.useCallback(
+    (changes: Parameters<typeof onNodesChange>[0]) => {
+      if (changes.some(c => c.type !== "select" && c.type !== "dimensions")) setIsDirty(true)
+      onNodesChange(changes)
+    },
+    [onNodesChange]
+  )
+
+  const handleEdgesChange = React.useCallback(
+    (changes: Parameters<typeof onEdgesChange>[0]) => {
+      if (changes.some(c => c.type !== "select")) setIsDirty(true)
+      onEdgesChange(changes)
+    },
+    [onEdgesChange]
   )
 
   // Direct addition of nodes from clicking the Toolbox / quick panels
   const addBlockNode = (block: AvailableTile) => {
-    const newId = block.type === "group" ? `group-${nodes.length + 1}` : `node-${nodes.length + 1}`
+    const newId = generateNodeId(block.type === "group" ? "group" : "node")
+    setIsDirty(true)
     
     // Position slightly offset from the last node
     const lastNode = nodes[nodes.length - 1]
@@ -2522,7 +2726,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
     setNodes(prev => [...prev, newNode])
 
-    if (lastNode) {
+    if (lastNode && lastNode.data.type !== "output" && lastNode.type !== "group" && lastNode.data.type !== "group") {
       const newEdge: Edge = {
         id: `edge-${lastNode.id}-${newId}`,
         source: lastNode.id,
@@ -2563,6 +2767,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   // ─── Execution context refs (mutable across async steps) ──────────
   const currentNodesRef = React.useRef(nodes)
   const currentEdgesRef = React.useRef(edges)
+  const isExecutingRef = React.useRef(false)
   React.useEffect(() => { currentNodesRef.current = nodes }, [nodes])
   React.useEffect(() => { currentEdgesRef.current = edges }, [edges])
 
@@ -2653,11 +2858,16 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
   // Simulate workflow execution with full data binding
   const simulateExecution = async (customInputs?: Record<string, string>) => {
+    // Guard against double execution (e.g. rapid double-click on Run button)
+    if (isExecutingRef.current) return
+    isExecutingRef.current = true
+
     setIsAwaitingInputs(false)
     const allNodes = currentNodesRef.current
     const allEdges = currentEdgesRef.current
     if (allNodes.length === 0) {
       setIsExecuting(false)
+      isExecutingRef.current = false
       return
     }
     setIsExecuting(true)
@@ -2689,6 +2899,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       }
 
       let step = 0
+      let runFailed = false
 
       for (const node of sortedNodes) {
       // Skip group nodes from execution pass as they are visual containers
@@ -2719,8 +2930,21 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       step++
       
       // Resolve {{placeholders}} in params using the current registry
-      const resolvedParams = resolveParams(node.data.params, nodeOutputs)
-      
+      const resolvedParams = resolveParams(node.data.params, nodeOutputs, undefined, node.id, allEdges)
+
+      // Surface unresolved placeholders instead of silently passing raw {{...}} text downstream
+      const unresolvedKeys = Object.entries(resolvedParams)
+        .filter(([, v]) => typeof v === "string" && /\{\{[^{}]*\}\}/.test(v))
+        .map(([k]) => k)
+      if (unresolvedKeys.length > 0) {
+        setLogs(prev => [...prev, {
+          nodeId: node.id,
+          label: node.data.label,
+          type: node.data.type,
+          message: `⚠️ Unresolved placeholders in param(s): ${unresolvedKeys.join(", ")} — upstream data was missing. Check connections & variable names.`
+        }])
+      }
+
       // running status
       setNodes(prev => prev.map(n => n.id === node.id ? {
         ...n,
@@ -2739,6 +2963,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           message: `[Step ${step}] Executing...${hasPlaceholders(node.data.params) ? " (resolved {{placeholders}})" : ""}`
         }
       ])
+
+      // When a filter node's condition fails, it blocks downstream propagation
+      let blockDownstream = false
 
       // Helper to update the correct log entry with success and data
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2850,9 +3077,10 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         }
         
         try {
-          const model = resolvedParams.model || "gemini-3.1-flash-image";
-          const numImages = parseInt(resolvedParams.numberOfImages || "1");
+          let model = resolvedParams.model || "gemini-3.1-flash-image";
+          if (model === "gemini-3-pro-image") model = "gemini-3-pro-image-preview";
           
+          const numImages = parseInt(resolvedParams.numberOfImages || "1");
           const isImagen4 = model === "imagen-4.0-generate-001";
           
           let targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${resolvedParams.apiKey || ""}`;
@@ -2875,8 +3103,10 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             };
           } else {
             // Gemini model schema
+            let combinedPrompt = "Generate an image strictly based on these instructions and reference images:\n\n" + (resolvedParams.prompt || "");
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parts: any[] = [{ text: resolvedParams.prompt || "" }];
+            const imageParts: any[] = [];
+            
             if (resolvedParams.referenceImage) {
               const refStr = resolvedParams.referenceImage;
               const regex = /data:(image\/\w+);base64,([A-Za-z0-9+/]+={0,2})/g;
@@ -2885,11 +3115,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               while ((match = regex.exec(refStr)) !== null) {
                 const textPart = refStr.slice(lastIndex, match.index).trim();
                 if (textPart) {
-                  parts.push({ text: textPart });
+                  combinedPrompt += (combinedPrompt ? "\n" : "") + textPart;
                 }
-                parts.push({
+                imageParts.push({
                   inlineData: {
-                    mimeType: match[1],
+                    mimeType: match[1] || "image/png",
                     data: match[2]
                   }
                 });
@@ -2897,9 +3127,13 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               }
               const remainingText = refStr.slice(lastIndex).trim();
               if (remainingText) {
-                parts.push({ text: remainingText });
+                combinedPrompt += (combinedPrompt ? "\n" : "") + remainingText;
               }
             }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const parts: any[] = [{ text: combinedPrompt }];
+            parts.push(...imageParts);
 
             const imageConfig: Record<string, any> = {};
             if (resolvedParams.aspectRatio && resolvedParams.aspectRatio !== "auto") {
@@ -2910,7 +3144,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             }
 
             payload = {
-              contents: [{ parts }],
+              contents: [{ role: "user", parts }],
               generationConfig: {
                 responseModalities: ["IMAGE"],
                 candidateCount: numImages,
@@ -2940,9 +3174,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           
           const contentType = res.headers.get("content-type") || "";
           let generatedImageUrls: string[] = [];
+          let responseJson: any = null;
           
           if (contentType.includes("application/json")) {
-            const json = await res.json();
+            responseJson = await res.json();
+            const json = responseJson;
             if (!res.ok) throw new Error(json.error?.message || json.error || "Google Imagen API Error");
             
             if (isImagen4) {
@@ -2955,7 +3191,15 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                }).filter(Boolean);
             } else {
               if (!json.candidates?.[0]?.content?.parts || json.candidates[0].content.parts.length === 0) {
-                throw new Error('No images were generated by the model');
+                console.error(`[Image Gen Node] Raw JSON response without images:`, JSON.stringify(json, null, 2));
+                let errReason = 'No images were generated by the model';
+                if (json.candidates?.[0]?.finishReason) {
+                  errReason += ` (Finish Reason: ${json.candidates[0].finishReason})`;
+                }
+                if (json.promptFeedback?.blockReason) {
+                  errReason += ` (Prompt Blocked: ${json.promptFeedback.blockReason})`;
+                }
+                throw new Error(errReason);
               }
               generatedImageUrls = json.candidates[0].content.parts
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2980,7 +3224,12 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           }
 
           if (generatedImageUrls.length === 0) {
-            throw new Error('No valid image data found in response');
+            // Check if the model returned text instead of images (e.g. safety refusal or unsupported model)
+            const textParts = responseJson?.candidates?.[0]?.content?.parts?.filter((p: any) => p.text) || [];
+            if (textParts.length > 0) {
+              throw new Error(`Model returned text instead of images: ${textParts.map((p: any) => p.text).join(' ').slice(0, 200)}`);
+            }
+            throw new Error('No valid image data found in response. The model may not support image generation or the prompt was blocked.');
           }
 
           nodeOutputs[node.id] = { imageUrl: generatedImageUrls[0], imageUrls: generatedImageUrls, aspectRatio: resolvedParams.aspectRatio || "1:1" };
@@ -2995,6 +3244,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             newLogs[newLogs.length - 1] = { ...newLogs[newLogs.length - 1], status: "error", message: msg, data: { error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } };
             return newLogs;
           });
+          runFailed = true;
           break; // stop execution
         }
       } else if (node.data.type === "http-request") {
@@ -3010,13 +3260,31 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         }
         
         try {
-          const fetchOptions: RequestInit = { method };
-          if (method !== "GET" && method !== "HEAD") {
-            fetchOptions.headers = { "Content-Type": "application/json" };
-            fetchOptions.body = typeof body === "string" ? body : JSON.stringify(body);
+          // Optional custom headers configured as a JSON string on the node
+          let customHeaders: Record<string, string> = {};
+          if (resolvedParams.headers && resolvedParams.headers !== "{}") {
+            try { customHeaders = JSON.parse(resolvedParams.headers) } catch { /* ignore bad json */ }
           }
-          
-          const res = await fetch(url, fetchOptions);
+
+          // Route through the server-side proxy to avoid browser CORS restrictions
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 60000);
+          let res: Response;
+          try {
+            res = await fetch("/api/workflows/proxy", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url,
+                method,
+                headers: { "Content-Type": "application/json", ...customHeaders },
+                body
+              }),
+              signal: controller.signal
+            });
+          } finally {
+            clearTimeout(timeout);
+          }
           const contentType = res.headers.get("content-type") || "";
           let data;
           if (contentType.includes("application/json")) {
@@ -3024,7 +3292,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           } else {
             data = await res.text();
           }
-          
+
           nodeOutputs[node.id] = { status: res.status, data };
           markNodeSuccess(nodeOutputs[node.id], msg);
         } catch (err: unknown) {
@@ -3038,6 +3306,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             newLogs[newLogs.length - 1] = { ...newLogs[newLogs.length - 1], status: "error", message: msg, data: { error: errMsg } };
             return newLogs;
           });
+          runFailed = true;
           break; // Stop execution on HTTP failure
         }
       } else if (node.data.type === "llm") {
@@ -3077,17 +3346,31 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             }
           }
 
+          let parsedSchema: any = undefined;
+          if (resolvedParams.jsonSchema && resolvedParams.responseFormat === "json_object") {
+            try {
+              parsedSchema = JSON.parse(resolvedParams.jsonSchema);
+            } catch (e) {
+              console.error("Failed to parse jsonSchema:", e);
+            }
+          }
+
           const payload = provider === "google" ? {
-            contents: [{ parts: [{ text: resolvedParams.prompt }] }],
+            contents: [{ role: "user", parts: [{ text: resolvedParams.prompt }] }],
             generationConfig: {
               temperature: Number(resolvedParams.temperature || 0.7),
-              responseMimeType: resolvedParams.responseFormat === "json_object" ? "application/json" : undefined
+              responseMimeType: resolvedParams.responseFormat === "json_object" ? "application/json" : undefined,
+              ...(parsedSchema ? { responseSchema: parsedSchema } : {})
             }
           } : {
             model,
             messages: [{ role: "user", content: resolvedParams.prompt }],
             temperature: Number(resolvedParams.temperature || 0.7),
-            ...(provider === "anthropic" ? { max_tokens: 4096 } : { response_format: resolvedParams.responseFormat === "json_object" ? { type: "json_object" } : undefined })
+            ...(provider === "anthropic" ? { max_tokens: 4096 } : { 
+              response_format: resolvedParams.responseFormat === "json_object" 
+                ? (parsedSchema ? { type: "json_schema", json_schema: { name: "structured_output", schema: parsedSchema } } : { type: "json_object" }) 
+                : undefined 
+            })
           };
 
           const res = await fetch("/api/workflows/proxy", {
@@ -3158,30 +3441,18 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
               return newLogs
             })
             nodeOutputs[node.id] = scriptResult
+            runFailed = true
             break
           }
         }
         nodeOutputs[node.id] = scriptResult
         markNodeSuccess(nodeOutputs[node.id], msg)
       } else if (node.data.type === "router") {
-        // Evaluate the condition
-        let result = false
-        try {
-          // Extremely simple simulated evaluation for mock purposes
-          const condition = resolvedParams.condition || "false"
-          if (condition.includes("==")) {
-             const parts = condition.split("==").map(s => s.trim())
-             result = parts[0] === parts[1]
-          } else if (condition.includes(">")) {
-             const parts = condition.split(">").map(s => s.trim())
-             result = Number(parts[0]) > Number(parts[1])
-          } else if (condition.trim() === "true") {
-             result = true
-          }
-        } catch (e) {
-           console.error("Router evaluation error", e)
-        }
-        
+        // Evaluate the condition as a real expression
+        // (supports ===, !==, ==, !=, >, <, >=, <=, &&, ||, literals, unquoted fallbacks)
+        const condition = resolvedParams.condition || "false"
+        const result = evaluateCondition(condition)
+
         nodeOutputs[node.id] = { branch: result ? "true" : "false", evaluated: result }
         markNodeSuccess(nodeOutputs[node.id], `Routed to branch: ${result ? "TRUE" : "FALSE"}`)
 
@@ -3249,31 +3520,101 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           .filter(e => e.source === node.id && e.sourceHandle === chosen)
           .forEach(e => activeEdgeIds.add(e.id))
       } else if (node.data.type === "merge") {
-         const upstreamIds = getUpstreamNodeIds(allEdges, node.id)
-         const aggregated: Record<string, unknown> = {}
-         for (const uid of upstreamIds) {
-           if (nodeOutputs[uid]) {
+         // Merge operates over DIRECT parents — the branches that actually feed this node
+         const directParentIds = allEdges.filter(e => e.target === node.id).map(e => e.source)
+         const available = directParentIds.filter(uid => nodeOutputs[uid] !== undefined)
+         const strategy = resolvedParams.strategy || "wait-all"
+
+         if (strategy === "first-wins") {
+           const firstId = available[0]
+           nodeOutputs[node.id] = firstId ? nodeOutputs[firstId] : { mergedData: {}, strategy }
+           markNodeSuccess(nodeOutputs[node.id], `First-wins: passed through output from branch ${firstId || "(none executed)"}`)
+         } else if (strategy === "append") {
+           nodeOutputs[node.id] = { items: available.map(uid => nodeOutputs[uid]), count: available.length, strategy }
+           markNodeSuccess(nodeOutputs[node.id], `Appended ${available.length} branch output(s) into an array`)
+         } else {
+           // wait-all: aggregate outputs of all ACTIVE upstream branches
+           // (inactive router/classifier branches never produce output, so they are excluded naturally)
+           const aggregated: Record<string, unknown> = {}
+           for (const uid of available) {
              aggregated[uid] = nodeOutputs[uid]
            }
+           nodeOutputs[node.id] = { mergedData: aggregated, strategy }
+           markNodeSuccess(nodeOutputs[node.id], `Merged ${available.length} active branch output(s) using wait-all strategy`)
          }
-         nodeOutputs[node.id] = { mergedData: aggregated, strategy: resolvedParams.strategy }
-         markNodeSuccess(nodeOutputs[node.id], `Merged ${Object.keys(aggregated).length} branches using ${resolvedParams.strategy || "wait-all"} strategy`)
       } else if (node.data.type === "boolean") {
-         nodeOutputs[node.id] = { result: true, operator: resolvedParams.operator }
-         markNodeSuccess(nodeOutputs[node.id], `Evaluated boolean logic (${resolvedParams.operator || "AND"})`)
+         const toBool = (v: unknown): boolean => {
+           if (typeof v === "boolean") return v
+           const s = String(v ?? "").trim().toLowerCase()
+           if (s === "" || s === "false" || s === "0" || s === "null" || s === "undefined" || s === "nan") return false
+           return true
+         }
+         const op1 = toBool(resolvedParams.operand1)
+         const op2 = toBool(resolvedParams.operand2)
+         const operator = resolvedParams.operator || "AND"
+         const result = operator === "NOT" ? !op1 : operator === "OR" ? (op1 || op2) : (op1 && op2)
+         nodeOutputs[node.id] = { result, operator, operand1: op1, ...(operator === "NOT" ? {} : { operand2: op2 }) }
+         markNodeSuccess(nodeOutputs[node.id], `Evaluated ${operator}(${operator === "NOT" ? op1 : `${op1}, ${op2}`}) → ${result}`)
       } else if (node.data.type === "transform") {
-         nodeOutputs[node.id] = { transformed: true }
-         markNodeSuccess(nodeOutputs[node.id], `Applied data transformation`)
+         // Apply the JSON mapping template, e.g. { "newKey": "{{$json.oldKey}}" }
+         const mappingStr = resolvedParams.mapping || "{}"
+         let mappingObj: Record<string, string> = {}
+         try {
+           const parsed = JSON.parse(mappingStr)
+           if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) mappingObj = parsed
+         } catch {
+           throw new Error(`Transform mapping is not valid JSON. Expected an object like { "newKey": "{{$json.oldKey}}" }`)
+         }
+         const directParentIds = allEdges.filter(e => e.target === node.id).map(e => e.source)
+         const upstreamVal = directParentIds.length ? nodeOutputs[directParentIds[0]] : undefined
+         const transformCtx = { item: upstreamVal, index: 0 }
+         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         const transformed: Record<string, any> = {}
+         for (const [key, tpl] of Object.entries(mappingObj)) {
+           const resolvedVal = resolveTemplate(String(tpl), nodeOutputs, transformCtx, node.id, allEdges)
+           try { transformed[key] = JSON.parse(resolvedVal) } catch { transformed[key] = resolvedVal }
+         }
+         nodeOutputs[node.id] = transformed
+         markNodeSuccess(nodeOutputs[node.id], `Transformed payload → ${Object.keys(transformed).length} key(s)`)
       } else if (node.data.type === "filter") {
-         nodeOutputs[node.id] = { filtered: true, passed: true }
-         markNodeSuccess(nodeOutputs[node.id], `Filter condition evaluated`)
+         // Evaluate the keep-condition. On arrays: per item via {{item.field}} bindings.
+         // On single payloads: a failing condition blocks downstream propagation.
+         const conditionTemplate = node.data.params.condition || "true"
+         const directParentIds = allEdges.filter(e => e.target === node.id).map(e => e.source)
+         const upstreamVal = directParentIds.length ? nodeOutputs[directParentIds[0]] : undefined
+         const upstreamArray: unknown[] | null = Array.isArray(upstreamVal) ? (upstreamVal as unknown[])
+           : (upstreamVal && typeof upstreamVal === "object" && Array.isArray((upstreamVal as Record<string, unknown>).items)
+             ? ((upstreamVal as Record<string, unknown>).items as unknown[])
+             : null)
+
+         if (upstreamArray) {
+           const keptItems = upstreamArray.filter((item: unknown, idx: number) => {
+             const perItem = resolveTemplate(conditionTemplate, nodeOutputs, { item, index: idx }, undefined, undefined)
+             return evaluateCondition(perItem)
+           })
+           nodeOutputs[node.id] = { items: keptItems, total: upstreamArray.length, keptCount: keptItems.length }
+           markNodeSuccess(nodeOutputs[node.id], `Filtered array: kept ${keptItems.length}/${upstreamArray.length} item(s)`)
+         } else {
+           const evaluated = resolveTemplate(conditionTemplate, nodeOutputs, { item: upstreamVal, index: 0 }, node.id, allEdges)
+           const passed = evaluateCondition(evaluated)
+           nodeOutputs[node.id] = { passed, data: passed ? upstreamVal : undefined }
+           if (passed) {
+             markNodeSuccess(nodeOutputs[node.id], `Condition passed — continuing execution`)
+           } else {
+             blockDownstream = true
+             markNodeSuccess(nodeOutputs[node.id], `Condition failed — downstream branches stopped`)
+           }
+         }
       } else if (node.data.type === "loop") {
-        // Get the array from upstream
+        // Get the array from upstream — prefer DIRECT parents over transitive ancestors
         const upstreamIds = getUpstreamNodeIds(allEdges, node.id)
-        const upstreamOutput = upstreamIds.length > 0 ? nodeOutputs[upstreamIds[0]] : null
-        
-        const rawArrayPathVal = resolveRawTemplate(node.data.params.arrayPath || "", nodeOutputs)
-        let arrData: unknown[] = [1, 2, 3] as unknown[] // default mock array
+        const directParentIds = allEdges.filter(e => e.target === node.id).map(e => e.source)
+        const upstreamOutput = directParentIds.length > 0
+          ? nodeOutputs[directParentIds[0]]
+          : (upstreamIds.length > 0 ? nodeOutputs[upstreamIds[0]] : null)
+
+        const rawArrayPathVal = resolveRawTemplate(node.data.params.arrayPath || "", nodeOutputs, undefined, node.id, allEdges)
+        let arrData: unknown[] | null = null
         
         // Detailed execution debug logs to easily find and diagnose any array resolution issues
         setLogs(prev => [...prev, {
@@ -3320,11 +3661,15 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
         }
 
         // --- Auto-Heal Strategy ---
-        // If the loop fell back to the default mock array of size 3 ([1, 2, 3]), let's scan all upstream node
-        // outputs for any array. If we find an array or an object with an array property (e.g. "slides"), 
-        // we use that actual array. This makes the execution 100% resilient and bulletproof under any conditions.
-        if (arrData.length === 3 && arrData[0] === 1 && arrData[1] === 2 && arrData[2] === 3) {
-          for (const uid of upstreamIds) {
+        // If the JSONPath didn't resolve to an array, scan upstream node outputs for any
+        // array (or an object containing an array property) as a resilience fallback.
+        if (arrData === null) {
+          // Auto-Heal: scan upstream node outputs for any array as a resilience fallback.
+          // Only scan DIRECT parents first (not all transitive ancestors) to avoid picking
+          // up unrelated arrays from distant upstream nodes that could cause the loop to
+          // iterate over the wrong array (e.g. iterating 2x instead of 1x).
+          const healScanIds = directParentIds.length > 0 ? directParentIds : upstreamIds
+          for (const uid of healScanIds) {
             const output = nodeOutputs[uid]
             if (output) {
               if (Array.isArray(output)) {
@@ -3332,42 +3677,43 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 break
               } else if (typeof output === "object") {
                 // Look for any key that contains a non-empty array
-                const arrayKey = Object.keys(output).find(k => Array.isArray(output[k]) && output[k].length > 0)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const arrayKey = Object.keys(output).find(k => Array.isArray((output as any)[k]) && (output as any)[k].length > 0)
                 if (arrayKey) {
-                  arrData = output[arrayKey]
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  arrData = (output as any)[arrayKey]
                   break
                 }
               }
             }
           }
         }
-        
+
+        // Never silently invent mock items — a misconfigured loop iterates 0 times and warns,
+        // rather than firing paid API calls with fake data.
+        if (arrData === null) {
+          arrData = []
+          setLogs(prev => [...prev, {
+            nodeId: node.id,
+            label: node.data.label,
+            type: node.data.type,
+            message: `⚠️ Loop array path "${node.data.params.arrayPath || "$.slides"}" did not resolve to an array from upstream data. Iterating 0 times.`
+          }])
+        }
+
         const itemName = resolvedParams.itemName || "slide"
         const loopMode = resolvedParams.mode || "parallel"
         const loopResults: unknown[] = []
         
-        // Get downstream nodes from this loop node
-        // Auto-heal: Ensure all nodes downstream of the loop node (excluding output sinks and groups) are assigned to the group
-        const associatedGroup = allNodes.find(n => n.type === "group" || n.data.type === "group")
+        // Get downstream nodes from this loop node (purely edge-derived — execution must
+        // never mutate the user's canvas structure as a side effect)
         const downstreamAll = getDownstreamNodes(node.id, allNodes, allEdges)
-        
-        if (associatedGroup) {
-          const groupId = associatedGroup.id
-          downstreamAll.forEach(dn => {
-            if (dn.id !== node.id && dn.data.type !== "output" && dn.type !== "group" && dn.data.type !== "group" && !dn.parentId) {
-              dn.parentId = groupId
-              setNodes(prev => prev.map(n => n.id === dn.id ? { ...n, parentId: groupId } : n))
-            }
-          })
-        }
 
         // We consider all non-output downstream nodes as part of the loop body
         const downstreamNodes = downstreamAll.filter(n => n.id !== node.id && n.data.type !== "output" && n.type !== "group" && n.data.type !== "group")
         
         // Mark all these internal nodes as loopInternal so they are skipped in the main pass
         downstreamNodes.forEach(dn => loopInternalNodeIds.add(dn.id))
-
-        markNodeSuccess(null, `Iterating array at path "${resolvedParams.arrayPath || "$.slides"}" in ${loopMode.toUpperCase()} mode...`)
 
         // Visual feedback for group node if exists
         setNodes(prev => prev.map(n => n.type === "group" ? { ...n, data: { ...n.data, status: "running" as const } } : n))
@@ -3388,7 +3734,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             // Mark node globally as processed
             processedNodeIds.add(subNode.id)
             
-            const subResolved = resolveParams(subNode.data.params, localNodeOutputs, loopCtx)
+            const subResolved = resolveParams(subNode.data.params, localNodeOutputs, loopCtx, subNode.id, allEdges)
 
             setNodes(prev => prev.map(n => n.id === subNode.id ? {
               ...n,
@@ -3449,14 +3795,24 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   }
                 }
 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                let parsedSchema: any = undefined;
+                if (subResolved.jsonSchema && subResolved.responseFormat === "json_object") {
+                  try { parsedSchema = JSON.parse(subResolved.jsonSchema); } catch { /* ignore bad schema */ }
+                }
+
                 const payload = provider === "google" ? {
-                  contents: [{ parts: [{ text: subResolved.prompt }] }],
-                  generationConfig: { temperature: Number(subResolved.temperature || 0.7), responseMimeType: subResolved.responseFormat === "json_object" ? "application/json" : undefined }
+                  contents: [{ role: "user", parts: [{ text: subResolved.prompt }] }],
+                  generationConfig: {
+                    temperature: Number(subResolved.temperature || 0.7),
+                    responseMimeType: subResolved.responseFormat === "json_object" ? "application/json" : undefined,
+                    ...(parsedSchema ? { responseSchema: parsedSchema } : {})
+                  }
                 } : {
                   model,
                   messages: [{ role: "user", content: subResolved.prompt }],
                   temperature: Number(subResolved.temperature || 0.7),
-                  ...(provider === "anthropic" ? { max_tokens: 4096 } : { response_format: subResolved.responseFormat === "json_object" ? { type: "json_object" } : undefined })
+                  ...(provider === "anthropic" ? { max_tokens: 4096 } : { response_format: subResolved.responseFormat === "json_object" ? (parsedSchema ? { type: "json_schema", json_schema: { name: "structured_output", schema: parsedSchema } } : { type: "json_object" }) : undefined })
                 };
 
                 const res = await fetch("/api/workflows/proxy", {
@@ -3490,7 +3846,9 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 
                 localNodeOutputs[subNode.id] = subResolved.responseFormat === "json_object" ? JSON.parse(cleanJsonString(content)) : { text: content };
               } else if (subNode.data.type === "image-gen") {
-                const model = subResolved.model || "gemini-3.1-flash-image";
+                let model = subResolved.model || "gemini-3.1-flash-image";
+                if (model === "gemini-3-pro-image") model = "gemini-3-pro-image-preview";
+                
                 const numImages = parseInt(subResolved.numberOfImages || "1");
                 const isImagen4 = model === "imagen-4.0-generate-001";
                 
@@ -3508,8 +3866,10 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     }
                   };
                 } else {
+                  let combinedPrompt = "Generate an image strictly based on these instructions and reference images:\n\n" + (subResolved.prompt || "");
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const parts: any[] = [{ text: subResolved.prompt || "" }];
+                  const imageParts: any[] = [];
+                  
                   if (subResolved.referenceImage) {
                     const refStr = subResolved.referenceImage;
                     const regex = /data:(image\/\w+);base64,([A-Za-z0-9+/]+={0,2})/g;
@@ -3518,11 +3878,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     while ((match = regex.exec(refStr)) !== null) {
                       const textPart = refStr.slice(lastIndex, match.index).trim();
                       if (textPart) {
-                        parts.push({ text: textPart });
+                        combinedPrompt += (combinedPrompt ? "\n" : "") + textPart;
                       }
-                      parts.push({
+                      imageParts.push({
                         inlineData: {
-                          mimeType: match[1],
+                          mimeType: match[1] || "image/png",
                           data: match[2]
                         }
                       });
@@ -3530,9 +3890,13 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     }
                     const remainingText = refStr.slice(lastIndex).trim();
                     if (remainingText) {
-                      parts.push({ text: remainingText });
+                      combinedPrompt += (combinedPrompt ? "\n" : "") + remainingText;
                     }
                   }
+
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const parts: any[] = [{ text: combinedPrompt }];
+                  parts.push(...imageParts);
 
                   const imageConfig: Record<string, any> = {};
                   if (subResolved.aspectRatio && subResolved.aspectRatio !== "auto") {
@@ -3543,7 +3907,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   }
 
                   payload = {
-                    contents: [{ parts }],
+                    contents: [{ role: "user", parts }],
                     generationConfig: { 
                       responseModalities: ["IMAGE"], 
                       candidateCount: numImages,
@@ -3572,9 +3936,11 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 
                 const contentType = res.headers.get("content-type") || "";
                 let generatedImageUrls: string[] = [];
+                let responseJson: any = null;
                 
                 if (contentType.includes("application/json")) {
-                  const json = await res.json();
+                  responseJson = await res.json();
+                  const json = responseJson;
                   if (!res.ok) throw new Error(json.error?.message || json.error || "Google Imagen API Error");
                   
                   if (isImagen4) {
@@ -3587,7 +3953,15 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                      }).filter(Boolean);
                   } else {
                     if (!json.candidates?.[0]?.content?.parts || json.candidates[0].content.parts.length === 0) {
-                      throw new Error('No images were generated by the model');
+                      console.error(`[Image Gen Loop Node] Raw JSON response without images:`, JSON.stringify(json, null, 2));
+                      let errReason = 'No images were generated by the model';
+                      if (json.candidates?.[0]?.finishReason) {
+                        errReason += ` (Finish Reason: ${json.candidates[0].finishReason})`;
+                      }
+                      if (json.promptFeedback?.blockReason) {
+                        errReason += ` (Prompt Blocked: ${json.promptFeedback.blockReason})`;
+                      }
+                      throw new Error(errReason);
                     }
                     generatedImageUrls = json.candidates[0].content.parts
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3612,7 +3986,12 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 }
                 
                 if (generatedImageUrls.length === 0) {
-                  throw new Error("No valid image data was returned by the Google Imagen API.");
+                  // Check if the model returned text instead of images (e.g. safety refusal or unsupported model)
+                  const textParts = responseJson?.candidates?.[0]?.content?.parts?.filter((p: any) => p.text) || [];
+                  if (textParts.length > 0) {
+                    throw new Error(`Model returned text instead of images: ${textParts.map((p: any) => p.text).join(' ').slice(0, 200)}`);
+                  }
+                  throw new Error("No valid image data was returned by the Google Imagen API. The model may not support image generation or the prompt was blocked.");
                 }
                 localNodeOutputs[subNode.id] = { imageUrl: generatedImageUrls[0], imageUrls: generatedImageUrls, aspectRatio: subResolved.aspectRatio || "1:1" };
               } else if (subNode.data.type === "output") {
@@ -3659,20 +4038,26 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           loopResults.push({ index: idx, item, results: downstreamNodes.map(dn => localNodeOutputs[dn.id]).filter(Boolean) })
         }
 
-        if (loopMode === "sequential") {
-          // Run iterations one after another (classic loop semantics)
-          for (let i = 0; i < arrData.length; i++) {
-            await runIteration(arrData[i], i)
+        try {
+          if (loopMode === "sequential") {
+            // Run iterations one after another (classic loop semantics)
+            for (let i = 0; i < arrData.length; i++) {
+              await runIteration(arrData[i], i)
+            }
+          } else {
+            // Run all iterations concurrently in parallel
+            await Promise.all(arrData.map((item, idx) => runIteration(item, idx)))
           }
-        } else {
-          // Run all iterations concurrently in parallel
-          await Promise.all(arrData.map((item, idx) => runIteration(item, idx)))
+        } finally {
+          // Always end visual feedback for group node, even when an iteration fails
+          setNodes(prev => prev.map(n => n.type === "group" ? { ...n, data: { ...n.data, status: "idle" as const } } : n))
         }
-        
-        // End visual feedback for group node
-        setNodes(prev => prev.map(n => n.type === "group" ? { ...n, data: { ...n.data, status: "idle" as const } } : n))
 
         nodeOutputs[node.id] = { iterations: loopResults.length, results: loopResults }
+
+        // The loop node is only marked successful AFTER all iterations complete —
+        // an iteration failure propagates to the node-level catch and marks it errored.
+        markNodeSuccess(nodeOutputs[node.id], `Iterated ${loopResults.length} item(s) in ${loopMode.toUpperCase()} mode`)
         
         // Activate outgoing edges of any internal nodes that lead to external nodes (Bridging Connection Gap)
         downstreamNodes.forEach(dn => {
@@ -3700,12 +4085,14 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           nodeOutputs[node.id] = applyOutputMapping(nodeOutputs[node.id], resolvedParams.outputMapping, nodeOutputs)
         }
 
-        // If execution was successful and not a router/classifier brancher, activate ALL outgoing edges from this node
-        if (node.data.type !== "router" && node.data.type !== "classifier") {
+        // If execution was successful and not a router/classifier brancher (and a filter didn't
+        // block propagation), activate ALL outgoing edges from this node
+        if (node.data.type !== "router" && node.data.type !== "classifier" && !blockDownstream) {
           allEdges.filter(e => e.source === node.id).forEach(e => activeEdgeIds.add(e.id))
         }
 
-        const delayMs = node.data.type === "delay" ? parseInt(resolvedParams.ms || "2000") : 1500
+        const parsedDelay = parseInt(resolvedParams.ms || "2000")
+        const delayMs = node.data.type === "delay" ? (isNaN(parsedDelay) ? 2000 : parsedDelay) : 1500
         await new Promise(resolve => setTimeout(resolve, delayMs))
 
         // success status
@@ -3725,15 +4112,21 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           message: `${log.message}\n⚠️ Error: ${errMsg}`,
           data: { error: errMsg }
         } : log))
+        runFailed = true
         break // Stop executing the rest of the workflow on error!
       }
     }
 
-      setLogs(prev => [...prev, { message: `[Executor] All steps executed cleanly. 🎉` }])
+      if (runFailed) {
+        setLogs(prev => [...prev, { message: `[Executor] Execution stopped due to a node failure. See the error step above.`, status: "error" }])
+      } else {
+        setLogs(prev => [...prev, { message: `[Executor] All steps executed cleanly. 🎉` }])
+      }
     } catch (err) {
       console.error(err)
       setLogs(prev => [...prev, { message: `[Executor] Workflow failed with internal error: ${err instanceof Error ? err.message : String(err)}`, status: "error" }])
     } finally {
+      isExecutingRef.current = false
       setIsExecuting(false)
     }
   }
@@ -3922,7 +4315,10 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 <Button 
                   size="sm" 
                   variant="ghost" 
-                  onClick={() => setActiveWorkflowId(null)}
+                  onClick={() => {
+                    if (isDirty && !window.confirm("You have unsaved changes. Leave without saving?")) return
+                    setActiveWorkflowId(null)
+                  }}
                   className="gap-1 px-2.5 h-9 text-xs"
                 >
                   <ArrowLeftIcon className="size-4" />
@@ -3932,7 +4328,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <Input 
                     value={workflowName}
-                    onChange={(e) => setWorkflowName(e.target.value)}
+                    onChange={(e) => { setWorkflowName(e.target.value); setIsDirty(true) }}
                     className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm font-bold px-0 h-9 font-sans w-full max-w-[240px] truncate"
                   />
                   {workflowDescription && (
@@ -3979,7 +4375,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   disabled={saving}
                   className="text-xs rounded-none font-semibold px-4 h-9"
                 >
-                  {saving ? "Saving..." : "Save Workflow"}
+                  {saving ? "Saving..." : saveState === "saved" ? "Saved ✓" : saveState === "error" ? "Save failed — retry" : isDirty ? "Save Workflow •" : "Save Workflow"}
                 </Button>
                 <Button 
                   size="sm" 
@@ -4056,8 +4452,8 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                 <ReactFlow
                   nodes={nodes}
                   edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
               onConnect={onConnect}
               onEdgeUpdate={onEdgeUpdate}
               onNodeClick={onNodeClick}
@@ -4229,8 +4625,8 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                   <h3 className="text-lg font-bold text-foreground">Execution Run</h3>
                   <p className="text-xs text-muted-foreground">Live progress and node outputs</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setIsRunSheetOpen(false)}>
-                  <Trash2Icon className="size-4 text-muted-foreground" />
+                <Button variant="ghost" size="icon" title="Close panel" onClick={() => setIsRunSheetOpen(false)}>
+                  <XIcon className="size-4 text-muted-foreground" />
                 </Button>
               </div>
 
@@ -4500,7 +4896,12 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                         )
                       })}
                       
-                      {selectedNode.data.type !== "trigger" && (!upstreamSearch || "current item loop".includes(upstreamSearch.toLowerCase())) && (
+                      {selectedNode.data.type !== "trigger" && (() => {
+                        // Only offer loop-item variables when this node is actually downstream of a loop
+                        const loopNodeForCtx = nodes.find(n => n.data.type === "loop")
+                        if (!loopNodeForCtx) return false
+                        return getDownstreamNodes(loopNodeForCtx.id, nodes, edges).some(n => n.id === selectedNode.id)
+                      })() && (!upstreamSearch || "current item loop".includes(upstreamSearch.toLowerCase())) && (
                         <div className="flex flex-col gap-1.5 mt-1 pt-2 border-t border-border/50">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600">
                             <div className="size-1.5 rounded-full bg-emerald-500/60" />
@@ -5023,6 +5424,16 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                         <option value="PUT">PUT</option>
                         <option value="DELETE">DELETE</option>
                       </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Custom Headers (JSON)</Label>
+                      <Textarea 
+                        value={selectedNode.data.params.headers || "{}"}
+                        onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, headers: e.target.value } })}
+                        className="rounded-none text-xs min-h-[60px] font-mono resize-none"
+                        placeholder='{ "Authorization": "Bearer ..." }'
+                      />
+                      <p className="text-[10px] text-muted-foreground/60">Requests are routed through the server proxy (avoids browser CORS issues).</p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">JSON Request Body</Label>

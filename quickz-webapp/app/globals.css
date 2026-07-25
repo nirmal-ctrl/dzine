@@ -124,3 +124,52 @@
     @apply font-sans;
   }
 }
+
+/* ─────────────── Aesthetic utilities ─────────────── */
+@keyframes aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -6%, 0) scale(1.06);
+  }
+  66% {
+    transform: translate3d(-4%, 4%, 0) scale(0.97);
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@layer utilities {
+  .animate-aurora {
+    animation: aurora-drift 14s ease-in-out infinite;
+  }
+  .animate-aurora-slow {
+    animation: aurora-drift 22s ease-in-out infinite reverse;
+  }
+  .animate-float-soft {
+    animation: float-soft 6s ease-in-out infinite;
+  }
+  .text-shimmer {
+    background-size: 200% auto;
+    animation: shimmer-sweep 6s linear infinite;
+  }
+}
