@@ -77,6 +77,7 @@ import {
   Maximize2Icon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ChevronRightIcon,
   SquareArrowOutUpRightIcon,
   RepeatIcon,
   LayersIcon,
@@ -1843,6 +1844,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [isRunning, setIsExecuting] = React.useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [logs, setLogs] = React.useState<{ id?: string, nodeId?: string, label?: string, type?: NodeType, status?: "running" | "success" | "error", message: string, data?: any }[]>([])
+  const [collapsedLogs, setCollapsedLogs] = React.useState<Record<string | number, boolean>>({})
   
   const fetchWorkflows = async () => {
     try {
@@ -2712,13 +2714,27 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
             contentType: resolvedParams.contentType || "application/json",
           }
           
-          // Handle file
-          if (customInputs && customInputs["_file_"]) {
-            triggerPayload.file = customInputs["_file_"]
-          } else if (runInputData["_file_"]) {
-            triggerPayload.file = runInputData["_file_"]
-          } else if (resolvedParams.sampleFile) {
-            triggerPayload.file = resolvedParams.sampleFile
+          // Handle file(s)
+          let loadedFiles: { name: string, content: string }[] = []
+          try {
+            if (customInputs && customInputs["_files_"]) {
+              loadedFiles = JSON.parse(customInputs["_files_"])
+            } else if (runInputData["_files_"]) {
+              loadedFiles = JSON.parse(runInputData["_files_"])
+            } else if (resolvedParams.sampleFiles) {
+              loadedFiles = JSON.parse(resolvedParams.sampleFiles)
+            } else {
+              // Legacy fallback if only single sampleFile or _file_ exists
+              const singleFile = (customInputs && customInputs["_file_"]) || runInputData["_file_"] || resolvedParams.sampleFile
+              if (singleFile) {
+                loadedFiles = [{ name: "sample-file", content: singleFile }]
+              }
+            }
+          } catch {}
+
+          if (loadedFiles.length > 0) {
+            triggerPayload.files = loadedFiles
+            triggerPayload.file = loadedFiles[0]?.content || ""
           }
           
           // Try to parse inputSchema if present
@@ -4090,20 +4106,88 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                         if (key === "_file_") {
                           return (
                             <div key={key} className="space-y-1.5">
-                              <Label className="text-xs font-bold text-foreground uppercase tracking-wider">File Upload</Label>
+                              <Label className="text-xs font-bold text-foreground uppercase tracking-wider">File Upload (Multiple support)</Label>
                               <Input 
                                 type="file"
+                                multiple
                                 onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (file) {
-                                    const reader = new FileReader()
-                                    reader.onload = () => setRunInputData(prev => ({...prev, [key]: reader.result as string}))
-                                    reader.readAsDataURL(file)
+                                  const files = e.target.files
+                                  if (files && files.length > 0) {
+                                    const filesArray = Array.from(files)
+                                    const loadedFiles: { name: string, content: string }[] = []
+                                    let processed = 0
+                                    
+                                    filesArray.forEach((file) => {
+                                      const reader = new FileReader()
+                                      reader.onload = () => {
+                                        loadedFiles.push({
+                                          name: file.name,
+                                          content: reader.result as string
+                                        })
+                                        processed++
+                                        if (processed === filesArray.length) {
+                                          let currentFiles: { name: string, content: string }[] = []
+                                          try {
+                                            if (runInputData["_files_"]) {
+                                              currentFiles = JSON.parse(runInputData["_files_"])
+                                            }
+                                          } catch {}
+                                          const merged = [...currentFiles, ...loadedFiles]
+                                          
+                                          setRunInputData(prev => ({
+                                            ...prev,
+                                            _files_: JSON.stringify(merged),
+                                            _file_: merged[0]?.content || ""
+                                          }))
+                                        }
+                                      }
+                                      reader.readAsDataURL(file)
+                                    })
                                   }
                                 }}
                                 className="text-xs h-10 rounded-md cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                               />
-                              {runInputData[key] && <p className="text-[10px] text-emerald-500 font-mono truncate mt-1">File loaded ({Math.round(runInputData[key].length / 1024)} KB)</p>}
+                              
+                              {/* Display list of uploaded run input files */}
+                              {(() => {
+                                let filesList: { name: string, content: string }[] = []
+                                try {
+                                  if (runInputData["_files_"]) {
+                                    filesList = JSON.parse(runInputData["_files_"])
+                                  } else if (runInputData["_file_"]) {
+                                    filesList = [{ name: "legacy-uploaded-file", content: runInputData["_file_"] }]
+                                  }
+                                } catch {}
+                                
+                                if (filesList.length === 0) return null;
+                                
+                                return (
+                                  <div className="space-y-1 max-h-32 overflow-y-auto border border-border p-1.5 bg-muted/10 rounded">
+                                    {filesList.map((f, idx) => (
+                                      <div key={idx} className="flex items-center gap-1.5 text-[9px] bg-background border p-1 rounded shadow-sm">
+                                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                                        <span className="font-mono truncate flex-1" title={f.name}>{f.name}</span>
+                                        <span className="text-muted-foreground/60 shrink-0">({Math.round(f.content.length / 1024)} KB)</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const next = [...filesList]
+                                            next.splice(idx, 1)
+                                            setRunInputData(prev => ({
+                                              ...prev,
+                                              _files_: JSON.stringify(next),
+                                              _file_: next[0]?.content || ""
+                                            }))
+                                          }}
+                                          className="text-[9px] text-destructive hover:underline shrink-0 ml-1"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              })()}
                             </div>
                           )
                         }
@@ -4137,40 +4221,64 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                       </div>
                     ) : (
                       <div className="space-y-6">
-                        {logs.map((log, i) => (
-                          <div key={i} className="flex flex-col gap-2 relative">
-                            {/* Visual connector line between steps */}
-                            {i !== logs.length - 1 && (
-                              <div className="absolute left-2.5 top-6 bottom-[-24px] w-0.5 bg-border/50" />
-                            )}
-                            
-                            <div className="flex items-center gap-3 relative z-10">
-                              <div className="shrink-0 size-5 flex items-center justify-center bg-card">
-                                {log.status === "running" && <SparklesIcon className="size-4 text-amber-500 animate-pulse" />}
-                                {log.status === "success" && <div className="size-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />}
-                                {log.status === "error" && <div className="size-2 rounded-full bg-red-500 ring-4 ring-red-500/20" />}
-                                {!log.status && <div className="size-1.5 rounded-full bg-primary" />}
-                              </div>
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <span className={`text-sm font-bold truncate ${log.status === 'error' ? 'text-red-500' : 'text-foreground'}`}>
-                                  {log.label || "System"}
-                                </span>
-                                {log.type && (
-                                  <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-mono px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
-                                    {log.type}
+                        {logs.map((log, i) => {
+                          const logKey = log.id || i;
+                          const isCollapsed = collapsedLogs[logKey] !== undefined 
+                            ? collapsedLogs[logKey] 
+                            : (log.status === "success");
+
+                          return (
+                            <div key={i} className="flex flex-col gap-2 relative">
+                              {/* Visual connector line between steps */}
+                              {i !== logs.length - 1 && (
+                                <div className="absolute left-2.5 top-6 bottom-[-24px] w-0.5 bg-border/50" />
+                              )}
+                              
+                              <div 
+                                className="flex items-center gap-3 relative z-10 cursor-pointer select-none group/log"
+                                onClick={() => {
+                                  setCollapsedLogs(prev => ({
+                                    ...prev,
+                                    [logKey]: !isCollapsed
+                                  }))
+                                }}
+                              >
+                                <div className="shrink-0 size-5 flex items-center justify-center bg-card">
+                                  {log.status === "running" && <SparklesIcon className="size-4 text-amber-500 animate-pulse" />}
+                                  {log.status === "success" && <div className="size-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />}
+                                  {log.status === "error" && <div className="size-2 rounded-full bg-red-500 ring-4 ring-red-500/20" />}
+                                  {!log.status && <div className="size-1.5 rounded-full bg-primary" />}
+                                </div>
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <span className={`text-sm font-bold truncate ${log.status === 'error' ? 'text-red-500' : 'text-foreground'} group-hover/log:text-primary transition-colors`}>
+                                    {log.label || "System"}
                                   </span>
+                                  {log.type && (
+                                    <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-mono px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
+                                      {log.type}
+                                    </span>
+                                  )}
+                                </div>
+                                {(log.message || log.data) && (
+                                  <div className="text-muted-foreground/50 group-hover/log:text-foreground shrink-0 transition-colors mr-1">
+                                    {isCollapsed ? <ChevronRightIcon className="size-3.5" /> : <ChevronDownIcon className="size-3.5" />}
+                                  </div>
                                 )}
                               </div>
-                            </div>
-                            
-                             <div className="pl-8 space-y-2">
-                              <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">{log.message}</p>
-                              {log.data && (
-                                <DataRenderer data={log.data} setMaximizedImage={setMaximizedImage} />
+                              
+                              {!isCollapsed && (log.message || log.data) && (
+                                <div className="pl-8 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                                  {log.message && (
+                                    <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">{log.message}</p>
+                                  )}
+                                  {log.data && (
+                                    <DataRenderer data={log.data} setMaximizedImage={setMaximizedImage} />
+                                  )}
+                                </div>
                               )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </>
@@ -4423,35 +4531,94 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     {/* File Uploader — shown when payload type supports files */}
                     {(selectedNode.data.params.contentType === "multipart/form-data" || selectedNode.data.params.contentType === "image/png") && (
                       <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sample / Expected File (e.g., Reference Image)</Label>
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sample / Expected Files (Multiple support)</Label>
                         <Input 
                           type="file"
+                          multiple
                           accept={selectedNode.data.params.contentType === "image/png" ? "image/png,image/jpeg,image/webp,image/gif" : "*/*"}
                           onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file) {
-                              const reader = new FileReader()
-                              reader.onload = () => {
-                                updateNodeData({ params: { ...selectedNode.data.params, sampleFile: reader.result as string } })
-                              }
-                              reader.readAsDataURL(file)
+                            const files = e.target.files
+                            if (files && files.length > 0) {
+                              const filesArray = Array.from(files)
+                              const loadedFiles: { name: string, content: string }[] = []
+                              
+                              let processed = 0
+                              filesArray.forEach((file) => {
+                                const reader = new FileReader()
+                                reader.onload = () => {
+                                  loadedFiles.push({
+                                    name: file.name,
+                                    content: reader.result as string
+                                  })
+                                  processed++
+                                  if (processed === filesArray.length) {
+                                    let currentFiles: { name: string, content: string }[] = []
+                                    try {
+                                      if (selectedNode.data.params.sampleFiles) {
+                                        currentFiles = JSON.parse(selectedNode.data.params.sampleFiles)
+                                      }
+                                    } catch {}
+                                    const merged = [...currentFiles, ...loadedFiles]
+                                    
+                                    updateNodeData({ 
+                                      params: { 
+                                        ...selectedNode.data.params, 
+                                        sampleFiles: JSON.stringify(merged),
+                                        sampleFile: merged[0]?.content || ""
+                                      } 
+                                    })
+                                  }
+                                }
+                                reader.readAsDataURL(file)
+                              })
                             }
                           }}
                           className="rounded-none text-xs h-9 cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-none file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                         />
-                        {selectedNode.data.params.sampleFile && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] text-emerald-600 font-mono truncate flex-1">✓ File loaded ({Math.round(selectedNode.data.params.sampleFile.length / 1024)} KB)</span>
-                            <button
-                              type="button"
-                              onClick={() => updateNodeData({ params: { ...selectedNode.data.params, sampleFile: "" } })}
-                              className="text-[10px] text-destructive hover:underline shrink-0"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        )}
-                        <p className="text-[10px] text-muted-foreground/60">Upload a representative sample file. Stored as a base64 data URI for testing and preview.</p>
+                        
+                        {/* Display list of sample files */}
+                        {(() => {
+                          let filesList: { name: string, content: string }[] = []
+                          try {
+                            if (selectedNode.data.params.sampleFiles) {
+                              filesList = JSON.parse(selectedNode.data.params.sampleFiles)
+                            } else if (selectedNode.data.params.sampleFile) {
+                              filesList = [{ name: "legacy-sample-file", content: selectedNode.data.params.sampleFile }]
+                            }
+                          } catch {}
+                          
+                          if (filesList.length === 0) return null;
+                          
+                          return (
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto border border-border p-2 bg-muted/20">
+                              {filesList.map((f, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-[10px] bg-background border p-1 px-2 rounded shadow-sm">
+                                  <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                                  <span className="font-mono truncate flex-1" title={f.name}>{f.name}</span>
+                                  <span className="text-muted-foreground/60 shrink-0">({Math.round(f.content.length / 1024)} KB)</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = [...filesList]
+                                      next.splice(idx, 1)
+                                      updateNodeData({
+                                        params: {
+                                          ...selectedNode.data.params,
+                                          sampleFiles: JSON.stringify(next),
+                                          sampleFile: next[0]?.content || ""
+                                        }
+                                      })
+                                    }}
+                                    className="text-[10px] text-destructive hover:underline shrink-0 ml-1"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })()}
+                        <p className="text-[10px] text-muted-foreground/60">Upload one or more sample files. Stored with filenames as base64 data URIs for testing and preview.</p>
                       </div>
                     )}
                   </>
