@@ -449,6 +449,18 @@ function getStaticNodeFields(nodeId: string, allNodes: Node<NodeData>[]): { name
     
     if (node.data.params.contentType === "multipart/form-data" || node.data.params.contentType === "image/png") {
       fields.push({ name: "file", type: "string", description: "Uploaded file base64 data" })
+      try {
+        if (node.data.params.sampleFiles) {
+          const customFiles = JSON.parse(node.data.params.sampleFiles)
+          if (Array.isArray(customFiles)) {
+            customFiles.forEach((f: any) => {
+              if (f.key) {
+                fields.push({ name: f.key, type: "string", description: `Uploaded file input: ${f.name || f.key}` })
+              }
+            })
+          }
+        }
+      } catch {}
     }
     
     if (fields.length > 0) return fields;
@@ -2580,7 +2592,24 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       
       // Also require input if it's a file upload type, to give them a chance to provide a file or mock it
       if (triggerNode.data.params.contentType === "multipart/form-data" || triggerNode.data.params.contentType === "image/png") {
-        if (!keys.includes("_file_")) keys.push("_file_")
+        let hasCustomFiles = false
+        try {
+          if (triggerNode.data.params.sampleFiles) {
+            const customFiles = JSON.parse(triggerNode.data.params.sampleFiles)
+            if (Array.isArray(customFiles) && customFiles.length > 0) {
+              customFiles.forEach((f: any) => {
+                if (f.key) {
+                  keys.push(`_fileKey:${f.key}`)
+                  hasCustomFiles = true
+                }
+              })
+            }
+          }
+        } catch {}
+        
+        if (!hasCustomFiles) {
+          if (!keys.includes("_file_")) keys.push("_file_")
+        }
         needsInput = true
       }
     }
@@ -2595,6 +2624,23 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
       if (keys.includes("_file_") && !runInputData["_file_"] && triggerNode?.data.params.sampleFile) {
         initialData["_file_"] = triggerNode.data.params.sampleFile
       }
+      
+      // Pre-fill custom distinct files from sampleFiles if they exist
+      try {
+        if (triggerNode?.data.params.sampleFiles) {
+          const customFiles = JSON.parse(triggerNode.data.params.sampleFiles)
+          if (Array.isArray(customFiles)) {
+            customFiles.forEach((f: any) => {
+              const runKey = `_fileKey:${f.key}`
+              if (keys.includes(runKey)) {
+                initialData[runKey] = runInputData[runKey] || f.content || ""
+                initialData[`_fileNameKey:${f.key}`] = runInputData[`_fileNameKey:${f.key}`] || f.name || ""
+              }
+            })
+          }
+        }
+      } catch {}
+      
       setRunInputData(initialData)
       setIsAwaitingInputs(true)
       return
@@ -2717,20 +2763,49 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
           // Handle file(s)
           let loadedFiles: { name: string, content: string }[] = []
           try {
-            if (customInputs && customInputs["_files_"]) {
-              loadedFiles = JSON.parse(customInputs["_files_"])
-            } else if (runInputData["_files_"]) {
-              loadedFiles = JSON.parse(runInputData["_files_"])
-            } else if (resolvedParams.sampleFiles) {
-              loadedFiles = JSON.parse(resolvedParams.sampleFiles)
-            } else {
-              // Legacy fallback if only single sampleFile or _file_ exists
-              const singleFile = (customInputs && customInputs["_file_"]) || runInputData["_file_"] || resolvedParams.sampleFile
-              if (singleFile) {
-                loadedFiles = [{ name: "sample-file", content: singleFile }]
+            if (resolvedParams.sampleFiles) {
+              const sampleFilesParsed = JSON.parse(resolvedParams.sampleFiles)
+              if (Array.isArray(sampleFilesParsed)) {
+                sampleFilesParsed.forEach((tf: any) => {
+                  const runKey = `_fileKey:${tf.key}`
+                  let content = ""
+                  let name = tf.name
+                  
+                  if (customInputs && customInputs[runKey]) {
+                    content = customInputs[runKey]
+                    name = customInputs[`_fileNameKey:${tf.key}`] || tf.name
+                  } else if (runInputData[runKey]) {
+                    content = runInputData[runKey]
+                    name = runInputData[`_fileNameKey:${tf.key}`] || tf.name
+                  } else {
+                    content = tf.content
+                  }
+                  
+                  if (content) {
+                    // Store as a direct property in triggerPayload so users can reference e.g., {{trigger.invoice}}
+                    triggerPayload[tf.key] = content
+                    loadedFiles.push({ name, content })
+                  }
+                })
               }
             }
           } catch {}
+
+          if (loadedFiles.length === 0) {
+            // Fallback to legacy single file or uploaded files if no distinct custom inputs were parsed
+            try {
+              if (customInputs && customInputs["_files_"]) {
+                loadedFiles = JSON.parse(customInputs["_files_"])
+              } else if (runInputData["_files_"]) {
+                loadedFiles = JSON.parse(runInputData["_files_"])
+              } else {
+                const singleFile = (customInputs && customInputs["_file_"]) || runInputData["_file_"] || resolvedParams.sampleFile
+                if (singleFile) {
+                  loadedFiles = [{ name: "sample-file", content: singleFile }]
+                }
+              }
+            } catch {}
+          }
 
           if (loadedFiles.length > 0) {
             triggerPayload.files = loadedFiles
@@ -4103,91 +4178,54 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
 
                     <div className="space-y-4 border border-border p-5 rounded-lg bg-card shadow-sm">
                       {expectedInputs.map(key => {
-                        if (key === "_file_") {
+                        if (key.startsWith("_fileKey:")) {
+                          const fileKey = key.substring(9)
                           return (
                             <div key={key} className="space-y-1.5">
-                              <Label className="text-xs font-bold text-foreground uppercase tracking-wider">File Upload (Multiple support)</Label>
+                              <Label className="text-xs font-bold text-foreground uppercase tracking-wider">File Upload: {fileKey}</Label>
                               <Input 
                                 type="file"
-                                multiple
                                 onChange={(e) => {
-                                  const files = e.target.files
-                                  if (files && files.length > 0) {
-                                    const filesArray = Array.from(files)
-                                    const loadedFiles: { name: string, content: string }[] = []
-                                    let processed = 0
-                                    
-                                    filesArray.forEach((file) => {
-                                      const reader = new FileReader()
-                                      reader.onload = () => {
-                                        loadedFiles.push({
-                                          name: file.name,
-                                          content: reader.result as string
-                                        })
-                                        processed++
-                                        if (processed === filesArray.length) {
-                                          let currentFiles: { name: string, content: string }[] = []
-                                          try {
-                                            if (runInputData["_files_"]) {
-                                              currentFiles = JSON.parse(runInputData["_files_"])
-                                            }
-                                          } catch {}
-                                          const merged = [...currentFiles, ...loadedFiles]
-                                          
-                                          setRunInputData(prev => ({
-                                            ...prev,
-                                            _files_: JSON.stringify(merged),
-                                            _file_: merged[0]?.content || ""
-                                          }))
-                                        }
-                                      }
-                                      reader.readAsDataURL(file)
-                                    })
+                                  const file = e.target.files?.[0]
+                                  if (file) {
+                                    const reader = new FileReader()
+                                    reader.onload = () => {
+                                      setRunInputData(prev => ({
+                                        ...prev,
+                                        [key]: reader.result as string,
+                                        [`_fileNameKey:${fileKey}`]: file.name
+                                      }))
+                                    }
+                                    reader.readAsDataURL(file)
                                   }
                                 }}
                                 className="text-xs h-10 rounded-md cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                               />
-                              
-                              {/* Display list of uploaded run input files */}
-                              {(() => {
-                                let filesList: { name: string, content: string }[] = []
-                                try {
-                                  if (runInputData["_files_"]) {
-                                    filesList = JSON.parse(runInputData["_files_"])
-                                  } else if (runInputData["_file_"]) {
-                                    filesList = [{ name: "legacy-uploaded-file", content: runInputData["_file_"] }]
+                              {runInputData[key] && (
+                                <p className="text-[10px] text-emerald-500 font-mono truncate mt-1">
+                                  ✓ loaded: {runInputData[`_fileNameKey:${fileKey}`] || "custom-file"} ({Math.round(runInputData[key].length / 1024)} KB)
+                                </p>
+                              )}
+                            </div>
+                          )
+                        }
+                        if (key === "_file_") {
+                          return (
+                            <div key={key} className="space-y-1.5">
+                              <Label className="text-xs font-bold text-foreground uppercase tracking-wider">File Upload</Label>
+                              <Input 
+                                type="file"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) {
+                                    const reader = new FileReader()
+                                    reader.onload = () => setRunInputData(prev => ({...prev, [key]: reader.result as string}))
+                                    reader.readAsDataURL(file)
                                   }
-                                } catch {}
-                                
-                                if (filesList.length === 0) return null;
-                                
-                                return (
-                                  <div className="space-y-1 max-h-32 overflow-y-auto border border-border p-1.5 bg-muted/10 rounded">
-                                    {filesList.map((f, idx) => (
-                                      <div key={idx} className="flex items-center gap-1.5 text-[9px] bg-background border p-1 rounded shadow-sm">
-                                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                                        <span className="font-mono truncate flex-1" title={f.name}>{f.name}</span>
-                                        <span className="text-muted-foreground/60 shrink-0">({Math.round(f.content.length / 1024)} KB)</span>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const next = [...filesList]
-                                            next.splice(idx, 1)
-                                            setRunInputData(prev => ({
-                                              ...prev,
-                                              _files_: JSON.stringify(next),
-                                              _file_: next[0]?.content || ""
-                                            }))
-                                          }}
-                                          className="text-[9px] text-destructive hover:underline shrink-0 ml-1"
-                                        >
-                                          Remove
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )
-                              })()}
+                                }}
+                                className="text-xs h-10 rounded-md cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                              />
+                              {runInputData[key] && <p className="text-[10px] text-emerald-500 font-mono truncate mt-1">File loaded ({Math.round(runInputData[key].length / 1024)} KB)</p>}
                             </div>
                           )
                         }
@@ -4530,95 +4568,167 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                     <p className="text-[10px] text-muted-foreground/60">Define the expected shape of the incoming payload. Used for validation and AI context.</p>
                     {/* File Uploader — shown when payload type supports files */}
                     {(selectedNode.data.params.contentType === "multipart/form-data" || selectedNode.data.params.contentType === "image/png") && (
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sample / Expected Files (Multiple support)</Label>
-                        <Input 
-                          type="file"
-                          multiple
-                          accept={selectedNode.data.params.contentType === "image/png" ? "image/png,image/jpeg,image/webp,image/gif" : "*/*"}
-                          onChange={(e) => {
-                            const files = e.target.files
-                            if (files && files.length > 0) {
-                              const filesArray = Array.from(files)
-                              const loadedFiles: { name: string, content: string }[] = []
-                              
-                              let processed = 0
-                              filesArray.forEach((file) => {
-                                const reader = new FileReader()
-                                reader.onload = () => {
-                                  loadedFiles.push({
-                                    name: file.name,
-                                    content: reader.result as string
-                                  })
-                                  processed++
-                                  if (processed === filesArray.length) {
-                                    let currentFiles: { name: string, content: string }[] = []
-                                    try {
-                                      if (selectedNode.data.params.sampleFiles) {
-                                        currentFiles = JSON.parse(selectedNode.data.params.sampleFiles)
-                                      }
-                                    } catch {}
-                                    const merged = [...currentFiles, ...loadedFiles]
-                                    
-                                    updateNodeData({ 
-                                      params: { 
-                                        ...selectedNode.data.params, 
-                                        sampleFiles: JSON.stringify(merged),
-                                        sampleFile: merged[0]?.content || ""
-                                      } 
-                                    })
-                                  }
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b pb-1.5">
+                          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Expected File Inputs</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              let currentFiles: { key: string, name: string, content: string }[] = []
+                              try {
+                                if (selectedNode.data.params.sampleFiles) {
+                                  currentFiles = JSON.parse(selectedNode.data.params.sampleFiles)
+                                } else if (selectedNode.data.params.sampleFile) {
+                                  currentFiles = [{ key: "file", name: "legacy-sample-file", content: selectedNode.data.params.sampleFile }]
                                 }
-                                reader.readAsDataURL(file)
+                              } catch {}
+                              
+                              const next = [...currentFiles, { key: `file_${currentFiles.length + 1}`, name: "", content: "" }]
+                              updateNodeData({
+                                params: {
+                                  ...selectedNode.data.params,
+                                  sampleFiles: JSON.stringify(next),
+                                  sampleFile: next[0]?.content || ""
+                                }
                               })
-                            }
-                          }}
-                          className="rounded-none text-xs h-9 cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-none file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                        />
+                            }}
+                            className="text-[10px] h-7 px-2 font-bold rounded-none"
+                          >
+                            + Add File Input
+                          </Button>
+                        </div>
                         
-                        {/* Display list of sample files */}
+                        {/* Display list of custom file input fields */}
                         {(() => {
-                          let filesList: { name: string, content: string }[] = []
+                          let filesList: { key: string, name: string, content: string }[] = []
                           try {
                             if (selectedNode.data.params.sampleFiles) {
                               filesList = JSON.parse(selectedNode.data.params.sampleFiles)
                             } else if (selectedNode.data.params.sampleFile) {
-                              filesList = [{ name: "legacy-sample-file", content: selectedNode.data.params.sampleFile }]
+                              filesList = [{ key: "file", name: "legacy-sample-file", content: selectedNode.data.params.sampleFile }]
                             }
                           } catch {}
                           
-                          if (filesList.length === 0) return null;
+                          if (filesList.length === 0) {
+                            return (
+                              <p className="text-[10px] text-muted-foreground italic text-center p-2 bg-muted/10 border border-dashed rounded">
+                                No file inputs defined yet. Click "+ Add File Input" to create one.
+                              </p>
+                            )
+                          }
                           
                           return (
-                            <div className="space-y-1.5 max-h-40 overflow-y-auto border border-border p-2 bg-muted/20">
+                            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                               {filesList.map((f, idx) => (
-                                <div key={idx} className="flex items-center gap-2 text-[10px] bg-background border p-1 px-2 rounded shadow-sm">
-                                  <span className="text-emerald-600 font-bold shrink-0">✓</span>
-                                  <span className="font-mono truncate flex-1" title={f.name}>{f.name}</span>
-                                  <span className="text-muted-foreground/60 shrink-0">({Math.round(f.content.length / 1024)} KB)</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const next = [...filesList]
-                                      next.splice(idx, 1)
-                                      updateNodeData({
-                                        params: {
-                                          ...selectedNode.data.params,
-                                          sampleFiles: JSON.stringify(next),
-                                          sampleFile: next[0]?.content || ""
-                                        }
-                                      })
-                                    }}
-                                    className="text-[10px] text-destructive hover:underline shrink-0 ml-1"
-                                  >
-                                    Remove
-                                  </button>
+                                <div key={idx} className="space-y-1.5 p-2.5 border border-border bg-card rounded shadow-sm relative group/file-row">
+                                  <div className="flex gap-2 items-center">
+                                    <div className="flex-1 flex flex-col gap-1">
+                                      <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider font-mono">Input Name / Payload Key</span>
+                                      <Input
+                                        value={f.key}
+                                        onChange={(e) => {
+                                          const next = [...filesList]
+                                          next[idx] = { ...next[idx], key: e.target.value.replace(/\s+/g, "_") }
+                                          updateNodeData({
+                                            params: {
+                                              ...selectedNode.data.params,
+                                              sampleFiles: JSON.stringify(next),
+                                              sampleFile: next[0]?.content || ""
+                                            }
+                                          })
+                                        }}
+                                        className="h-8 text-xs font-mono rounded-none"
+                                        placeholder="e.g. invoice, avatar"
+                                      />
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const next = [...filesList]
+                                        next.splice(idx, 1)
+                                        updateNodeData({
+                                          params: {
+                                            ...selectedNode.data.params,
+                                            sampleFiles: JSON.stringify(next),
+                                            sampleFile: next[0]?.content || ""
+                                          }
+                                        })
+                                      }}
+                                      className="shrink-0 size-8 mt-4 text-muted-foreground hover:text-destructive rounded-none"
+                                      title="Delete file input"
+                                    >
+                                      <Trash2Icon className="size-3.5" />
+                                    </Button>
+                                  </div>
+                                  
+                                  <div className="pt-1">
+                                    {f.content ? (
+                                      <div className="flex items-center gap-2 text-[10px] bg-emerald-500/5 border border-emerald-500/20 p-2 rounded">
+                                        <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-mono truncate font-bold text-foreground" title={f.name}>{f.name}</p>
+                                          <p className="text-[9px] text-muted-foreground mt-0.5">{Math.round(f.content.length / 1024)} KB</p>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const next = [...filesList]
+                                            next[idx] = { ...next[idx], name: "", content: "" }
+                                            updateNodeData({
+                                              params: {
+                                                ...selectedNode.data.params,
+                                                sampleFiles: JSON.stringify(next),
+                                                sampleFile: next[0]?.content || ""
+                                              }
+                                            })
+                                          }}
+                                          className="text-[10px] text-destructive hover:underline font-semibold"
+                                        >
+                                          Clear
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="relative">
+                                        <Input
+                                          type="file"
+                                          accept={selectedNode.data.params.contentType === "image/png" ? "image/png,image/jpeg,image/webp,image/gif" : "*/*"}
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0]
+                                            if (file) {
+                                              const reader = new FileReader()
+                                              reader.onload = () => {
+                                                const next = [...filesList]
+                                                next[idx] = {
+                                                  ...next[idx],
+                                                  name: file.name,
+                                                  content: reader.result as string
+                                                }
+                                                updateNodeData({
+                                                  params: {
+                                                    ...selectedNode.data.params,
+                                                    sampleFiles: JSON.stringify(next),
+                                                    sampleFile: next[0]?.content || ""
+                                                  }
+                                                })
+                                              }
+                                              reader.readAsDataURL(file)
+                                            }
+                                          }}
+                                          className="rounded-none text-xs h-8 cursor-pointer file:mr-2 file:py-0.5 file:px-2 file:rounded-none file:border-0 file:text-[10px] file:font-bold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>
-                          )
+                          );
                         })()}
-                        <p className="text-[10px] text-muted-foreground/60">Upload one or more sample files. Stored with filenames as base64 data URIs for testing and preview.</p>
+                        <p className="text-[10px] text-muted-foreground/60">Create distinct file input fields. Stored with custom label keys and mock filenames for downstream references like <code className="text-foreground">{"{{trigger.<inputName>}}"}</code>.</p>
                       </div>
                     )}
                   </>
