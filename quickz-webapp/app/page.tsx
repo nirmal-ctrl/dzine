@@ -1,67 +1,48 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  Bell,
   Check,
+  ChevronDown,
   Globe,
-  Infinity as InfinityIcon,
-  KeyRound,
-  MousePointerClick,
-  Puzzle,
-  ShieldCheck,
+  Layers,
+  Plus,
+  Search,
   Sparkles,
-  Workflow,
   Zap,
 } from "lucide-react";
 
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-
 const features = [
   {
-    icon: Workflow,
     title: "Visual Workflows",
     description:
-      "Compose powerful automations with a drag-and-drop editor. No code required — just describe what you want.",
+      "Compose powerful automations with a drag-and-drop editor. No code required  just describe what you want.",
+    icon: Layers,
+    large: true,
   },
   {
-    icon: KeyRound,
     title: "Bring Your Own Keys",
     description:
       "Use your own OpenAI, Anthropic, or Gemini API keys. Full control over providers, models, and spend.",
+    icon: Zap,
   },
   {
-    icon: Sparkles,
     title: "AI-Powered Blocks",
     description:
       "Summarize, extract, rewrite, generate, and reason over any page content with pre-built AI blocks.",
+    icon: Sparkles,
   },
   {
-    icon: Globe,
-    title: "Runs in Your Browser",
-    description:
-      "A native Chrome extension that works where you work. No context switching, no extra tabs, no copy-paste.",
-  },
-  {
-    icon: ShieldCheck,
     title: "Private by Design",
     description:
       "Your data never touches our servers. Requests go straight from your browser to your chosen AI provider.",
+    icon: Check,
   },
   {
-    icon: InfinityIcon,
-    title: "Lifetime License",
+    title: "Runs in Your Browser",
     description:
-      "Pay once, use forever. Every future update included. No subscriptions, no recurring fees, ever.",
+      "A native Chrome extension that works where you work. No context switching, no extra tabs, no copy-paste.",
+    icon: Globe,
   },
 ];
 
@@ -76,7 +57,7 @@ const steps = [
     step: "02",
     title: "Connect your AI keys",
     description:
-      "Paste your API keys — your keys stay local in your browser, never on our servers.",
+      "Paste your API keys  your keys stay local in your browser, never on our servers.",
   },
   {
     step: "03",
@@ -86,475 +67,598 @@ const steps = [
   },
 ];
 
-const pricingFeatures = [
-  "Lifetime access — pay once",
-  "All premium features unlocked",
-  "Every future update included",
-  "2 device activations",
-  "Priority email support",
+const testimonials = [
+  {
+    quote:
+      "Quickz replaced three different tools for me. I summarize research, extract data, and draft replies without ever leaving the tab I'm in.",
+    name: "Sarah Chen",
+    role: "Product Marketing Lead",
+    initials: "SC",
+    color: "bg-[#3984ff]",
+  },
+  {
+    quote:
+      "The fact that my API keys never leave my browser sold me instantly. It's the only AI tool our security team approved without a review.",
+    name: "Marcus Webb",
+    role: "Engineering Manager",
+    initials: "MW",
+    color: "bg-[#ff7442]",
+  },
+  {
+    quote:
+      "I built a competitor-monitoring workflow in 10 minutes. It now saves me around 6 hours every single week. Lifetime deal was a no-brainer.",
+    name: "Priya Nair",
+    role: "Founder",
+    initials: "PN",
+    color: "bg-[#0101db]",
+  },
 ];
 
-const stats = [
-  { value: "100%", label: "Local & private — keys never leave your browser" },
-  { value: "3+", label: "AI providers supported out of the box" },
-  { value: "∞", label: "Lifetime updates with a single purchase" },
+const faqs = [
+  {
+    question: "Do I need my own API keys?",
+    answer:
+      "Yes. Quickz follows a bring-your-own-keys model. Connect OpenAI, Anthropic, or Gemini keys  they stay stored locally in your browser and are never sent to our servers.",
+  },
+  {
+    question: "Is this really a one-time payment?",
+    answer:
+      "Absolutely. Pay once and get lifetime access, including every future update. No subscriptions, no seat licenses, no recurring fees  ever.",
+  },
+  {
+    question: "How many devices can I use it on?",
+    answer:
+      "Every license includes 2 device activations. You can manage and deactivate devices yourself from the dashboard at any time.",
+  },
+  {
+    question: "Does my browsing data leave my machine?",
+    answer:
+      "No. Page content is sent directly from your browser to the AI provider you configured. Quickz never proxies, stores, or sees your data.",
+  },
+  {
+    question: "Can I build workflows without coding?",
+    answer:
+      "Yes  the visual editor lets you compose blocks with drag and drop, and the AI generator can scaffold an entire workflow from a plain-English description.",
+  },
 ];
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      {/* ─────────────────────────── Header ─────────────────────────── */}
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/55">
-        <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
-          <Link href="/" className="group flex items-center gap-2.5">
-            <span className="relative flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-md shadow-primary/25 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:shadow-primary/30">
-              <Zap className="size-4" />
+    <div className="flex min-h-screen flex-col bg-white font-sans text-black">
+      {/* ═══════════════════════ HERO ═══════════════════════ */}
+      <section className="relative overflow-hidden bg-[linear-gradient(180deg,#0865ff_0%,#0865ff_68%,#ffffff_100%)]">
+        {/* Grid  fades out with the blue */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 [mask-image:linear-gradient(to_bottom,black_0%,black_55%,transparent_92%)]"
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.09)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.09)_1px,transparent_1px)] bg-[size:5.5rem_5.5rem]" />
+        </div>
+
+        {/* ── Nav ── */}
+        <header className="relative z-30 mx-auto flex w-full max-w-[1280px] items-center justify-between px-6 pt-7 sm:px-10">
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-white text-[#0865ff]">
+              <Zap className="size-4.5 fill-current" />
             </span>
-            <span className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-lg font-semibold tracking-tight">
+            <span className="text-xl font-bold tracking-tight text-white">
               Quickz
             </span>
           </Link>
 
-          <nav className="ml-auto hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-2 md:flex">
+            <button className="flex items-center gap-1.5 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:bg-white/20">
+              All pages <ChevronDown className="size-3.5" />
+            </button>
             <Link
               href="#features"
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
+              className="rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:bg-white/20"
             >
               Features
             </Link>
             <Link
-              href="#how-it-works"
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
-            >
-              How it works
-            </Link>
-            <Link
               href="#pricing"
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
+              className="rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:bg-white/20"
             >
               Pricing
             </Link>
           </nav>
 
-          <div className="ml-4 flex items-center gap-1.5 md:ml-6">
-            <ThemeToggle />
-            <Link
-              href="/dashboard"
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "sm" }),
-                "hidden sm:inline-flex"
-              )}
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/buy"
-              className={cn(
-                buttonVariants({ size: "sm" }),
-                "shadow-md shadow-primary/20 transition-shadow hover:shadow-lg hover:shadow-primary/25"
-              )}
-            >
-              Get Quickz
-              <ArrowRight className="ml-1 size-3.5" />
-            </Link>
+          <Link
+            href="/buy"
+            className="rounded-full bg-white px-6 py-3 text-sm font-bold text-black shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.04]"
+          >
+            Get Quickz Now
+          </Link>
+        </header>
+
+        {/* ── Hero body ── */}
+        <div className="relative z-10 mx-auto w-full max-w-[1280px] px-6 pt-14 sm:px-10 sm:pt-16">
+          {/* Massive headline */}
+          <h1 className="relative z-0 font-extrabold uppercase leading-[0.95] tracking-[-0.02em] text-white">
+            <span className="block text-left text-[clamp(3.2rem,11vw,10rem)]">
+              Automate
+            </span>
+            <span className="block text-right text-[clamp(3.2rem,11vw,10rem)]">
+              The Web
+            </span>
+          </h1>
+
+          {/* ── Content row: copy • mockup • copy  all in flow, no overlap ── */}
+          <div className="mt-10 grid grid-cols-1 items-start gap-12 pb-10 lg:mt-6 lg:grid-cols-[minmax(0,290px)_minmax(0,1fr)_minmax(0,290px)] lg:gap-8">
+            {/* Left column copy */}
+            <div className="order-2 max-w-[300px] text-white lg:order-1 lg:pt-20">
+              <p className="text-[17px] font-medium leading-[1.6] text-white/90">
+                AI-powered workflows to automate any web task, saving you
+                time and effort on every page.
+              </p>
+              <div className="mt-7 flex -space-x-3">
+                <span className="flex size-11 items-center justify-center rounded-full border-2 border-white/40 bg-[#3984ff] text-xs font-bold text-white">
+                  SC
+                </span>
+                <span className="flex size-11 items-center justify-center rounded-full border-2 border-white/40 bg-[#ff7442] text-xs font-bold text-white">
+                  MW
+                </span>
+                <span className="flex size-11 items-center justify-center rounded-full border-2 border-white/40 bg-[#0101db] text-xs font-bold text-white">
+                  PN
+                </span>
+              </div>
+              <p className="mt-4 text-sm font-bold">Trusted by</p>
+              <p className="text-[13px] font-medium text-white/75">
+                2,500+ users worldwide
+              </p>
+            </div>
+
+            {/* ── Mockup ── */}
+            <div className="relative order-1 mx-auto w-full max-w-[420px] lg:order-2">
+              {/* Floating badges  anchored to the mockup edges */}
+              <div className="absolute -left-10 top-14 z-30 hidden -rotate-[10deg] items-center justify-center rounded-full bg-[#0101db] px-5 py-3 text-sm font-bold text-white shadow-[0_4px_10px_rgba(0,0,0,0.1)] md:flex">
+                New!
+              </div>
+              <div className="absolute -left-14 bottom-24 z-30 hidden rotate-[4deg] rounded-t-[28px] rounded-bl-[28px] bg-white px-6 py-3.5 text-sm font-bold text-black shadow-[0_4px_10px_rgba(0,0,0,0.1)] md:block">
+                Smart AI Matching
+              </div>
+              <div className="absolute -right-12 top-1/3 z-30 hidden -rotate-[3deg] rounded-t-[28px] rounded-br-[28px] bg-white px-6 py-3.5 text-sm font-bold text-black shadow-[0_4px_10px_rgba(0,0,0,0.1)] md:block">
+                28 Best Matches
+              </div>
+
+              {/* Browser frame */}
+              <div className="relative rounded-t-[28px] border border-b-0 border-black/10 bg-white shadow-[0_24px_60px_-12px_rgba(0,0,0,0.25)]">
+                {/* Chrome bar */}
+                <div className="flex h-11 items-center justify-between rounded-t-[28px] border-b border-gray-100 bg-[#f8f8f8] px-5">
+                  <div className="flex gap-1.5">
+                    <span className="size-2.5 rounded-full bg-[#ff5f57]" />
+                    <span className="size-2.5 rounded-full bg-[#febc2e]" />
+                    <span className="size-2.5 rounded-full bg-[#28c840]" />
+                  </div>
+                  <div className="flex h-6 w-44 items-center justify-center rounded-md bg-white text-[10px] font-medium text-[#616161] shadow-sm">
+                    <Search className="mr-1.5 size-3" /> quickz.ai
+                  </div>
+                  <div className="w-10" />
+                </div>
+
+                {/* Extension UI */}
+                <div className="h-[400px] overflow-hidden bg-white p-6 text-black">
+                  <div className="mb-6 flex items-center justify-between">
+                    <div>
+                      <p className="text-[15px] font-bold">Hello, John Wick</p>
+                      <p className="text-xs font-medium text-[#616161]">
+                        Good Morning
+                      </p>
+                    </div>
+                    <span className="flex size-9 items-center justify-center rounded-full bg-[#f8f8f8] text-black ring-1 ring-black/5">
+                      <Bell className="size-4" />
+                    </span>
+                  </div>
+
+                  <p className="mb-3 text-sm font-bold">Run a Workflow</p>
+                  <div className="mb-5 flex gap-2 overflow-hidden">
+                    <span className="whitespace-nowrap rounded-full border border-black/10 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#616161]">
+                      UX Research
+                    </span>
+                    <span className="whitespace-nowrap rounded-full bg-black px-3.5 py-1.5 text-xs font-semibold text-white">
+                      Summarize
+                    </span>
+                    <span className="whitespace-nowrap rounded-full border border-black/10 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#616161]">
+                      Extract
+                    </span>
+                  </div>
+
+                  <div className="mb-2 flex items-end justify-between">
+                    <p className="text-4xl font-extrabold tracking-tight">28</p>
+                    <p className="text-xs font-semibold text-[#616161]">
+                      Best Matching · View All
+                    </p>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    <div className="rounded-2xl bg-[#0865ff] p-4 text-white">
+                      <p className="text-sm font-bold">Summarize Article</p>
+                      <p className="mt-0.5 text-xs font-medium text-white/75">
+                        Extract key points from any page
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-[#ff7442] p-4 text-white">
+                      <p className="text-sm font-bold">Table to CSV</p>
+                      <p className="mt-0.5 text-xs font-medium text-white/75">
+                        Convert web tables to spreadsheets
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right column copy */}
+            <div className="order-3 max-w-[300px] text-white lg:justify-self-end lg:pt-40">
+              <p className="text-[17px] font-medium leading-[1.6] text-white/90">
+                Discover automations that match the way you work. Get your
+                repetitive tasks done fast.
+              </p>
+              <div className="mt-6 flex flex-col gap-3">
+                <Link
+                  href="/buy"
+                  className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-bold text-black shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.04]"
+                >
+                  <Globe className="size-4" /> Chrome Web Store
+                </Link>
+                <Link
+                  href="#pricing"
+                  className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-bold text-black shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.04]"
+                >
+                  <Zap className="size-4" /> Get Lifetime Access
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      <main className="flex-1">
-        {/* ─────────────────────────── Hero ─────────────────────────── */}
-        <section className="relative overflow-hidden">
-          {/* Layered aurora background */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,black_60%,transparent_100%)] opacity-50" />
-            <div className="animate-aurora absolute -top-24 left-1/4 h-[420px] w-[520px] -translate-x-1/2 rounded-full bg-primary/25 blur-3xl" />
-            <div className="animate-aurora-slow absolute -top-16 right-1/4 h-[380px] w-[480px] translate-x-1/2 rounded-full bg-chart-2/20 blur-3xl" />
-            <div className="absolute left-1/2 top-1/3 h-[300px] w-[600px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
+      {/* ═══════════════════════ LOGO STRIP ═══════════════════════ */}
+      <section className="border-b border-black/5 bg-white">
+        <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-8 px-6 py-14 sm:px-10">
+          <p className="text-sm font-semibold uppercase tracking-[0.15em] text-[#616161]">
+            Powering workflows at
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-x-14 gap-y-6 text-xl font-bold tracking-tight text-black/25">
+            <span>Google</span>
+            <span>Notion</span>
+            <span>Linear</span>
+            <span>Figma</span>
+            <span>Stripe</span>
+            <span>Vercel</span>
           </div>
+        </div>
+      </section>
 
-          <div className="mx-auto max-w-6xl px-4 pb-28 pt-24 sm:px-6 sm:pt-32 lg:pt-40">
-            <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-              <Badge
-                variant="secondary"
-                className="mb-7 gap-1.5 border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-primary shadow-sm backdrop-blur"
-              >
-                <Sparkles className="size-3.5" />
-                AI automation, right inside Chrome
-              </Badge>
-
-              <h1 className="text-balance text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-                Automate any workflow{" "}
-                <span className="relative inline-block bg-gradient-to-r from-primary via-chart-2 to-primary bg-clip-text text-transparent">
-                  in your browser
-                </span>
-              </h1>
-
-              <p className="mt-6 max-w-2xl text-pretty text-lg leading-8 text-muted-foreground sm:text-xl">
-                Quickz is a premium Chrome extension that puts AI-driven
-                automation one click away. Bring your own API keys, build
-                visual workflows, and own it for life.
-              </p>
-
-              <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
-                <Link
-                  href="/buy"
-                  className={cn(
-                    buttonVariants({ size: "lg" }),
-                    "h-12 px-8 text-base shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
-                  )}
-                >
-                  Get lifetime access
-                  <ArrowRight className="ml-2 size-4 transition-transform group-hover:translate-x-0.5" />
-                </Link>
-                <Link
-                  href="#how-it-works"
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "lg" }),
-                    "h-12 px-8 text-base backdrop-blur"
-                  )}
-                >
-                  See how it works
-                </Link>
-              </div>
-
-              <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-2">
-                  <span className="flex size-5 items-center justify-center rounded-full bg-primary/10">
-                    <Check className="size-3 text-primary" />
-                  </span>
-                  One-time payment
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="flex size-5 items-center justify-center rounded-full bg-primary/10">
-                    <Check className="size-3 text-primary" />
-                  </span>
-                  Your keys, your data
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="flex size-5 items-center justify-center rounded-full bg-primary/10">
-                    <Check className="size-3 text-primary" />
-                  </span>
-                  Free updates forever
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ─────────────────────── Stats strip ─────────────────────── */}
-        <section className="border-y border-border/60 bg-muted/40">
-          <div className="mx-auto grid max-w-6xl grid-cols-1 divide-y divide-border/60 px-4 sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:px-6">
-            {stats.map((stat) => (
-              <div
-                key={stat.label}
-                className="flex flex-col items-center gap-1 px-6 py-8 text-center"
-              >
-                <span className="text-3xl font-bold tracking-tight text-primary">
-                  {stat.value}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {stat.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ──────────────────────── Features ───────────────────────── */}
-        <section id="features" className="scroll-mt-20 py-24 sm:py-32">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <div className="mx-auto max-w-2xl text-center">
-              <Badge variant="outline" className="mb-4">
-                Features
-              </Badge>
-              <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-5xl">
-                Everything you need to automate the web
-              </h2>
-              <p className="mt-4 text-pretty text-lg text-muted-foreground">
-                A focused toolkit designed for power users who want AI working
-                for them on every page — without giving up privacy or control.
-              </p>
-            </div>
-
-            <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {features.map((feature) => (
-                <Card
-                  key={feature.title}
-                  className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/10 hover:ring-primary/30"
-                >
-                  {/* Hover glow accent */}
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute -right-8 -top-8 size-32 rounded-full bg-primary/10 blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                  />
-                  <CardHeader>
-                    <div className="mb-3 flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20 transition-all duration-300 group-hover:from-primary group-hover:to-primary/80 group-hover:text-primary-foreground group-hover:shadow-lg group-hover:shadow-primary/25 group-hover:ring-primary/40">
-                      <feature.icon className="size-5" />
-                    </div>
-                    <CardTitle className="text-lg">{feature.title}</CardTitle>
-                    <CardDescription className="leading-6">
-                      {feature.description}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ────────────────────── How it works ─────────────────────── */}
-        <section
-          id="how-it-works"
-          className="scroll-mt-20 border-y border-border/60 bg-muted/40 py-24 sm:py-32"
-        >
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <div className="mx-auto max-w-2xl text-center">
-              <Badge variant="outline" className="mb-4">
-                How it works
-              </Badge>
-              <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-5xl">
-                Up and running in minutes
-              </h2>
-              <p className="mt-4 text-pretty text-lg text-muted-foreground">
-                No accounts to manage, no data to migrate. Three steps and
-                you&apos;re automating.
-              </p>
-            </div>
-
-            <div className="mt-16 grid gap-10 md:grid-cols-3">
-              {steps.map((item, i) => (
-                <div
-                  key={item.step}
-                  className="relative flex flex-col items-center text-center md:items-start md:text-left"
-                >
-                  <div className="flex w-full items-center gap-4">
-                    <span className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 font-mono text-sm font-semibold text-primary">
-                      {item.step}
-                    </span>
-                    {i < steps.length - 1 && (
-                      <div className="hidden h-px flex-1 bg-border md:block" />
-                    )}
-                  </div>
-                  <h3 className="mt-5 text-xl font-semibold">{item.title}</h3>
-                  <p className="mt-2 max-w-xs text-muted-foreground">
-                    {item.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ──────────────────────── Pricing ────────────────────────── */}
-        <section id="pricing" className="scroll-mt-20 py-24 sm:py-32">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <div className="mx-auto max-w-2xl text-center">
-              <Badge variant="outline" className="mb-4">
-                Pricing
-              </Badge>
-              <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-5xl">
-                One price. Yours forever.
-              </h2>
-              <p className="mt-4 text-pretty text-lg text-muted-foreground">
-                No subscriptions, no seat licenses, no surprises. A single
-                payment unlocks everything — permanently.
-              </p>
-            </div>
-
-            <div className="relative mx-auto mt-16 max-w-md">
-              {/* Gradient border + glow wrapper */}
-              <div
-                aria-hidden
-                className="absolute -inset-6 rounded-[2rem] bg-primary/20 blur-2xl"
-              />
-              <div className="relative rounded-[1.35rem] bg-gradient-to-br from-primary via-chart-2 to-primary p-[1.5px] shadow-2xl shadow-primary/20">
-                <Card className="relative overflow-hidden rounded-[1.25rem] ring-0">
-                  {/* subtle top sheen */}
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/10 to-transparent"
-                  />
-                  <div className="absolute right-4 top-4 z-10">
-                    <Badge className="shadow-md shadow-primary/25">
-                      <Sparkles className="size-3" />
-                      Lifetime deal
-                    </Badge>
-                  </div>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xl">Quickz Pro</CardTitle>
-                    <CardDescription>
-                      Everything, forever. For individuals and power users.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-6">
-                    <div className="flex items-baseline gap-2">
-                      <span className="bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-5xl font-bold tracking-tight">
-                        ₹4,999
-                      </span>
-                      <span className="text-muted-foreground">one-time</span>
-                    </div>
-
-                    <Separator />
-
-                    <ul className="flex flex-col gap-3">
-                      {pricingFeatures.map((item) => (
-                        <li
-                          key={item}
-                          className="flex items-start gap-3 text-sm"
-                        >
-                          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-primary ring-1 ring-primary/20">
-                            <Check className="size-3" />
-                          </span>
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <Link
-                      href="/buy"
-                      className={cn(
-                        buttonVariants({ size: "lg" }),
-                        "h-12 w-full text-base shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
-                      )}
-                    >
-                      Buy Quickz Pro
-                      <ArrowRight className="ml-2 size-4" />
-                    </Link>
-                    <p className="text-center text-xs text-muted-foreground">
-                      Secure payment · Instant license delivery · 2 devices
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ─────────────────────── Final CTA ───────────────────────── */}
-        <section className="relative overflow-hidden border-t border-border/60">
-          <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-            <div className="animate-aurora absolute left-1/3 top-1/2 h-[380px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-3xl" />
-            <div className="animate-aurora-slow absolute right-1/4 top-1/3 h-[320px] w-[480px] translate-x-1/2 rounded-full bg-chart-2/15 blur-3xl" />
-          </div>
-          <div className="mx-auto max-w-6xl px-4 py-24 text-center sm:px-6 sm:py-32">
-            <div className="mx-auto flex max-w-2xl flex-col items-center">
-              <span className="animate-float-soft mb-6 flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-xl shadow-primary/30 ring-1 ring-primary/30">
-                <MousePointerClick className="size-7" />
-              </span>
-              <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-5xl">
-                Stop repeating yourself on the web
-              </h2>
-              <p className="mt-4 text-pretty text-lg text-muted-foreground">
-                Join the professionals who let Quickz handle the busywork —
-                securely, privately, and right inside Chrome.
-              </p>
-              <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
-                <Link
-                  href="/buy"
-                  className={cn(
-                    buttonVariants({ size: "lg" }),
-                    "h-12 px-8 text-base"
-                  )}
-                >
-                  Get Quickz for ₹4,999
-                  <ArrowRight className="ml-2 size-4" />
-                </Link>
-                <Link
-                  href="/pricing"
-                  className={cn(
-                    buttonVariants({ variant: "ghost", size: "lg" }),
-                    "h-12 px-8 text-base"
-                  )}
-                >
-                  Full pricing details
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* ─────────────────────────── Footer ─────────────────────────── */}
-      <footer className="border-t border-border/60 bg-muted/30">
-        <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 md:flex-row md:items-start md:justify-between">
-          <div className="flex flex-col gap-3">
-            <Link href="/" className="flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Zap className="size-4" />
-              </span>
-              <span className="text-lg font-semibold tracking-tight">
-                Quickz
-              </span>
-            </Link>
-            <p className="max-w-xs text-sm text-muted-foreground">
-              Premium AI automation for Chrome. Your keys, your data, your
-              workflows — forever.
+      {/* ═══════════════════════ FEATURES ═══════════════════════ */}
+      <section id="features" className="bg-white py-24 sm:py-28">
+        <div className="mx-auto max-w-[1280px] px-6 sm:px-10">
+          <div className="mx-auto mb-16 max-w-[560px] text-center">
+            <h2 className="text-[2.9rem] font-semibold leading-[1.2] tracking-[-0.03em] sm:text-[3.5rem]">
+              Everything you need to automate
+            </h2>
+            <p className="mt-5 text-lg font-medium leading-[1.7] text-[#616161]">
+              A focused toolkit for power users who want AI working for them
+              on every page  without giving up privacy or control.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-10 sm:grid-cols-3">
-            <div className="flex flex-col gap-3">
-              <span className="text-sm font-medium">Product</span>
-              <Link
-                href="#features"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature) => (
+              <div
+                key={feature.title}
+                className={
+                  feature.large
+                    ? "group rounded-[32px] bg-[#0865ff] p-10 text-white md:col-span-2 lg:col-span-1 lg:row-span-2"
+                    : "group rounded-[32px] bg-[#f8f8f8] p-10 transition-colors hover:bg-[#0865ff] hover:text-white"
+                }
               >
-                Features
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Pricing
-              </Link>
-              <Link
-                href="/dashboard"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Dashboard
-              </Link>
-            </div>
-            <div className="flex flex-col gap-3">
-              <span className="text-sm font-medium">Resources</span>
-              <Link
-                href="#how-it-works"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                How it works
-              </Link>
-              <Link
-                href="/buy"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Get a license
-              </Link>
-            </div>
-            <div className="flex flex-col gap-3">
-              <span className="text-sm font-medium">Legal</span>
-              <Link
-                href="#"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Terms of Service
-              </Link>
-              <Link
-                href="#"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Privacy Policy
-              </Link>
-            </div>
+                <div
+                  className={
+                    feature.large
+                      ? "mb-8 flex size-14 items-center justify-center rounded-2xl bg-white text-[#0865ff]"
+                      : "mb-8 flex size-14 items-center justify-center rounded-2xl bg-white text-black shadow-sm transition-colors group-hover:text-[#0865ff]"
+                  }
+                >
+                  <feature.icon className="size-6" />
+                </div>
+                <h3 className="text-2xl font-semibold tracking-[-0.01em]">
+                  {feature.title}
+                </h3>
+                <p
+                  className={
+                    feature.large
+                      ? "mt-4 font-medium leading-[1.7] text-white/80"
+                      : "mt-4 font-medium leading-[1.7] text-[#616161] group-hover:text-white/80"
+                  }
+                >
+                  {feature.description}
+                </p>
+                {feature.large && (
+                  <div className="mt-10 space-y-3">
+                    <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+                      <span className="flex size-8 items-center justify-center rounded-full bg-white text-[#0865ff]">
+                        <Zap className="size-4" />
+                      </span>
+                      <div className="h-2.5 flex-1 rounded-full bg-white/25" />
+                    </div>
+                    <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+                      <span className="flex size-8 items-center justify-center rounded-full bg-white text-[#ff7442]">
+                        <Layers className="size-4" />
+                      </span>
+                      <div className="h-2.5 w-2/3 rounded-full bg-white/25" />
+                    </div>
+                    <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+                      <span className="flex size-8 items-center justify-center rounded-full bg-white text-[#0101db]">
+                        <Sparkles className="size-4" />
+                      </span>
+                      <div className="h-2.5 w-1/2 rounded-full bg-white/25" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        <Separator />
+      {/* ═══════════════════════ HOW IT WORKS ═══════════════════════ */}
+      <section id="how-it-works" className="bg-[#f8f8f8] py-24 sm:py-28">
+        <div className="mx-auto max-w-[1280px] px-6 sm:px-10">
+          <div className="mx-auto mb-16 max-w-[560px] text-center">
+            <h2 className="text-[2.9rem] font-semibold leading-[1.2] tracking-[-0.03em] sm:text-[3.5rem]">
+              Up and running in minutes
+            </h2>
+            <p className="mt-5 text-lg font-medium leading-[1.7] text-[#616161]">
+              No accounts to manage, no data to migrate. Three steps and
+              you're automating.
+            </p>
+          </div>
 
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:px-6">
-          <p>© {new Date().getFullYear()} Quickz.ai. All rights reserved.</p>
-          <p className="flex items-center gap-1.5">
-            <Puzzle className="size-3.5" />
-            Built as a Chrome Extension
-          </p>
+          <div className="grid gap-6 md:grid-cols-3">
+            {steps.map((item) => (
+              <div
+                key={item.step}
+                className="rounded-[32px] bg-white p-10 text-center"
+              >
+                <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#0865ff] text-lg font-extrabold text-white shadow-[0_8px_20px_rgba(8,101,255,0.35)]">
+                  {item.step}
+                </div>
+                <h3 className="mt-8 text-2xl font-semibold tracking-[-0.01em]">
+                  {item.title}
+                </h3>
+                <p className="mt-4 font-medium leading-[1.7] text-[#616161]">
+                  {item.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════ TESTIMONIALS ═══════════════════════ */}
+      <section className="bg-white py-24 sm:py-28">
+        <div className="mx-auto max-w-[1280px] px-6 sm:px-10">
+          <div className="mx-auto mb-16 max-w-[560px] text-center">
+            <h2 className="text-[2.9rem] font-semibold leading-[1.2] tracking-[-0.03em] sm:text-[3.5rem]">
+              Loved by power users
+            </h2>
+            <p className="mt-5 text-lg font-medium leading-[1.7] text-[#616161]">
+              Professionals who live in the browser trust Quickz to handle
+              the busywork.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            {testimonials.map((t) => (
+              <figure
+                key={t.name}
+                className="flex flex-col justify-between rounded-[24px] bg-[#f8f8f8] p-10"
+              >
+                <blockquote className="text-[17px] font-medium leading-[1.7] text-black">
+                  &ldquo;{t.quote}&rdquo;
+                </blockquote>
+                <figcaption className="mt-10 flex items-center gap-4">
+                  <span
+                    className={`flex size-12 items-center justify-center rounded-full text-sm font-bold text-white ${t.color}`}
+                  >
+                    {t.initials}
+                  </span>
+                  <div>
+                    <p className="text-[15px] font-bold">{t.name}</p>
+                    <p className="text-sm font-medium text-[#616161]">
+                      {t.role}
+                    </p>
+                  </div>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════ PRICING ═══════════════════════ */}
+      <section id="pricing" className="bg-[#0865ff] py-24 sm:py-28">
+        <div className="mx-auto max-w-[1280px] px-6 sm:px-10">
+          <div className="mx-auto mb-16 max-w-[620px] text-center text-white">
+            <h2 className="text-[2.9rem] font-semibold leading-[1.2] tracking-[-0.03em] sm:text-[3.5rem]">
+              One price. Yours forever.
+            </h2>
+            <p className="mt-5 text-lg font-medium leading-[1.7] text-white/80">
+              No subscriptions, no seat licenses, no surprises. A single
+              payment unlocks everything  permanently.
+            </p>
+          </div>
+
+          <div className="mx-auto max-w-[460px] rounded-[32px] bg-white p-10 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.3)] sm:p-12">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0101db] px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-white">
+              <Sparkles className="size-3.5" /> Lifetime deal
+            </span>
+            <h3 className="mt-6 text-2xl font-semibold tracking-[-0.01em]">
+              Quickz Pro
+            </h3>
+            <p className="mt-2 font-medium text-[#616161]">
+              Everything, forever. For individuals and power users.
+            </p>
+
+            <div className="mt-8 flex items-end gap-3">
+              <span className="text-6xl font-extrabold tracking-[-0.03em]">
+                ₹4,999
+              </span>
+              <span className="pb-2 font-semibold text-[#616161]">
+                one-time
+              </span>
+            </div>
+
+            <ul className="mt-8 space-y-4 border-t border-black/5 pt-8">
+              {[
+                "Lifetime access  pay once",
+                "All premium features unlocked",
+                "Every future update included",
+                "2 device activations",
+                "Priority email support",
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-3.5 font-medium">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#0865ff] text-white">
+                    <Check className="size-3.5" />
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+
+            <Link
+              href="/buy"
+              className="mt-10 flex h-14 items-center justify-center gap-2 rounded-full bg-black text-base font-bold text-white transition-transform hover:scale-[1.02]"
+            >
+              Get Lifetime Access <ArrowRight className="size-4" />
+            </Link>
+            <p className="mt-4 text-center text-xs font-medium text-[#616161]">
+              Secure payment · Instant license delivery · 2 devices
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════ FAQ ═══════════════════════ */}
+      <section className="bg-white py-24 sm:py-28">
+        <div className="mx-auto max-w-[820px] px-6 sm:px-10">
+          <div className="mb-14 text-center">
+            <h2 className="text-[2.9rem] font-semibold leading-[1.2] tracking-[-0.03em] sm:text-[3.5rem]">
+              Frequently asked questions
+            </h2>
+          </div>
+
+          <div className="space-y-4">
+            {faqs.map((faq) => (
+              <details
+                key={faq.question}
+                className="group rounded-[24px] bg-[#f8f8f8] px-8 py-6 open:bg-[#0865ff] open:text-white"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-semibold [&::-webkit-details-marker]:hidden">
+                  {faq.question}
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-sm transition-transform group-open:rotate-45">
+                    <Plus className="size-4" />
+                  </span>
+                </summary>
+                <p className="mt-4 max-w-[90%] font-medium leading-[1.7] text-[#616161] group-open:text-white/85">
+                  {faq.answer}
+                </p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════ FINAL CTA ═══════════════════════ */}
+      <section className="bg-white px-6 pb-24 sm:px-10">
+        <div className="relative mx-auto max-w-[1280px] overflow-hidden rounded-[32px] bg-gradient-to-b from-[#0865ff] to-[#0101db] px-6 py-24 text-center text-white sm:py-32">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-60"
+          >
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.07)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
+          </div>
+          <div className="relative">
+            <h2 className="mx-auto max-w-[800px] text-[2.9rem] font-semibold leading-[1.15] tracking-[-0.03em] sm:text-[4rem]">
+              Stop repeating yourself on the web
+            </h2>
+            <p className="mx-auto mt-6 max-w-[520px] text-lg font-medium leading-[1.7] text-white/80">
+              Join the professionals who let Quickz handle the busywork
+              securely, privately, and right inside Chrome.
+            </p>
+            <Link
+              href="/buy"
+              className="mt-10 inline-flex h-14 items-center justify-center gap-2 rounded-full bg-white px-10 text-base font-bold text-black shadow-[0_8px_24px_rgba(0,0,0,0.2)] transition-transform hover:scale-[1.04]"
+            >
+              Get Quickz for ₹4,999 <ArrowRight className="size-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════ FOOTER ═══════════════════════ */}
+      <footer className="border-t border-black/5 bg-white">
+        <div className="mx-auto max-w-[1280px] px-6 py-16 sm:px-10">
+          <div className="flex flex-col justify-between gap-12 md:flex-row">
+            <div className="max-w-[280px]">
+              <Link href="/" className="flex items-center gap-2.5">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-[#0865ff] text-white">
+                  <Zap className="size-4.5 fill-current" />
+                </span>
+                <span className="text-xl font-bold tracking-tight">Quickz</span>
+              </Link>
+              <p className="mt-5 font-medium leading-[1.7] text-[#616161]">
+                Premium AI automation for Chrome. Your keys, your data, your
+                workflows  forever.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-14 sm:grid-cols-3">
+              <div className="flex flex-col gap-4">
+                <span className="text-sm font-bold uppercase tracking-wide">
+                  Product
+                </span>
+                <Link href="#features" className="font-medium text-[#616161] transition-colors hover:text-black">
+                  Features
+                </Link>
+                <Link href="#pricing" className="font-medium text-[#616161] transition-colors hover:text-black">
+                  Pricing
+                </Link>
+                <Link href="/dashboard" className="font-medium text-[#616161] transition-colors hover:text-black">
+                  Dashboard
+                </Link>
+              </div>
+              <div className="flex flex-col gap-4">
+                <span className="text-sm font-bold uppercase tracking-wide">
+                  Resources
+                </span>
+                <Link href="#how-it-works" className="font-medium text-[#616161] transition-colors hover:text-black">
+                  How it works
+                </Link>
+                <Link href="/buy" className="font-medium text-[#616161] transition-colors hover:text-black">
+                  Get a license
+                </Link>
+              </div>
+              <div className="flex flex-col gap-4">
+                <span className="text-sm font-bold uppercase tracking-wide">
+                  Legal
+                </span>
+                <Link href="#" className="font-medium text-[#616161] transition-colors hover:text-black">
+                  Terms of Service
+                </Link>
+                <Link href="#" className="font-medium text-[#616161] transition-colors hover:text-black">
+                  Privacy Policy
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-black/5 pt-8 text-sm font-medium text-[#616161] sm:flex-row">
+            <p>© {new Date().getFullYear()} Quickz.ai. All rights reserved.</p>
+            <p>Built as a Chrome Extension</p>
+          </div>
         </div>
       </footer>
     </div>

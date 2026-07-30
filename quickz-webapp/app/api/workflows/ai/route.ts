@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 | http-request | HTTP request | url, method (GET/POST), body (JSON string w/ {{placeholder}}) |
 | script | Execute a JS code block | code (full function body, e.g. 'return items.map(i => i*2);') |
 | delay | Wait N milliseconds | ms (number) |
-| output | Terminal sink — aggregates results and finalizes workflow payload | outputKey, format (json/text/html/buffer) |
+| output | Terminal sink  aggregates results and finalizes workflow payload | outputKey, format (json/text/html/buffer) |
 | loop | Iterate over an array | arrayPath (JSONPath string, e.g. '$.slides'), itemName (string, e.g. 'slide'), mode (parallel or sequential) |
 | router | Conditional logic branch | condition (JS expression string, e.g. '{{$json.value}} > 5') |
 | merge | Wait/combine branches | strategy (wait-all / first-wins / append) |
@@ -139,7 +139,7 @@ Respond ONLY with a raw JSON object: no markdown, no explanation, no code fences
 - **Create**: If no current canvas is provided, build a brand-new workflow from scratch. Every workflow MUST end with an "output" node that defines the final result.
 - **Modify**: If a current canvas is provided (see below), you MUST base your response on it. Preserve every node and edge the user did not ask to change. Return the *complete* updated workflow, every node and every edge, not just the delta.
 
-Current active nodes on canvas (with full params — preserve these exactly unless the user asks to change them):
+Current active nodes on canvas (with full params  preserve these exactly unless the user asks to change them):
 ${JSON.stringify(activeNodes, null, 2)}
 
 Current active edges on canvas:
