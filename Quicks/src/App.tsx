@@ -24,7 +24,6 @@ import { ImagenConfigSection } from "@/components/sections/ImagenConfigSection";
 import { LicenseView } from "@/components/views/LicenseView";
 
 // Hooks
-import { useAuth } from "@/hooks/useAuth";
 import { useLicense } from "@/hooks/useLicense";
 
 // Utils
@@ -36,8 +35,7 @@ import {
 } from "@/utils/imagenPromptBuilder";
 
 export default function App() {
-  // Auth & License
-  const { user } = useAuth();
+  // License
   const licenseInfo = useLicense();
   const [licensedOnce, setLicensedOnce] = useState(false);
 
@@ -584,7 +582,6 @@ export default function App() {
       onConfigChange={setConfig}
       onSave={saveConfig}
       onBack={() => setView('home')}
-      user={user}
       licenseInfo={licenseInfo}
       onActivateRequest={() => setView('activate')}
     />;

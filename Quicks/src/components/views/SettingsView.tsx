@@ -1,8 +1,5 @@
 import React from 'react';
-import { ArrowLeft, LogOut, ShieldCheck, Key } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import type { User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { ArrowLeft, ShieldCheck, Key } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +12,6 @@ interface SettingsViewProps {
     onConfigChange: (config: AppConfig) => void;
     onSave: () => void;
     onBack: () => void;
-    user: User | null;
     licenseInfo: LicenseInfo;
     onActivateRequest: () => void;
 }
@@ -24,13 +20,8 @@ interface SettingsViewProps {
 const isVertexAI = import.meta.env.VITE_IS_NOT_API_ACCESS === 'true';
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
-    config, onConfigChange, onSave, onBack, user, licenseInfo, onActivateRequest
+    config, onConfigChange, onSave, onBack, licenseInfo, onActivateRequest
 }) => {
-
-    const handleSignOut = async () => {
-        await signOut(auth);
-        onBack();
-    };
 
     const handleDeactivate = () => {
         if (confirm('Are you sure you want to deactivate this license on this device?')) {
@@ -49,62 +40,47 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
             </div>
 
-            {/* Account Section */}
-            {user && (
-                <>
-                    <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Account</p>
-                        <p className="text-sm font-medium truncate">{user.email}</p>
+            {/* License Section */}
+            <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">License</p>
 
-                        {/* License Status */}
-                        <div className={`flex items-center gap-2 text-xs rounded-md px-2 py-1.5 ${licenseInfo.valid
-                            ? 'bg-green-500/10 text-green-600 border border-green-500/20'
-                            : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                            }`}>
-                            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                            <span className="font-medium">{licenseInfo.valid ? 'Quickz Pro' : 'Free Version'}</span>
-                            {licenseInfo.valid && licenseInfo.remainingDevices !== null && (
-                                <span className="ml-auto text-muted-foreground">
-                                    {licenseInfo.remainingDevices} devices left
-                                </span>
-                            )}
-                        </div>
+                {/* License Status */}
+                <div className={`flex items-center gap-2 text-xs rounded-md px-2 py-1.5 ${licenseInfo.valid
+                    ? 'bg-green-500/10 text-green-600 border border-green-500/20'
+                    : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                    }`}>
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-medium">{licenseInfo.valid ? 'Quickz Pro' : 'Free Version'}</span>
+                    {licenseInfo.valid && licenseInfo.remainingDevices !== null && (
+                        <span className="ml-auto text-muted-foreground">
+                            {licenseInfo.remainingDevices} devices left
+                        </span>
+                    )}
+                </div>
 
-                        {licenseInfo.valid ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full h-8 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/30"
-                                onClick={handleDeactivate}
-                            >
-                                <Key className="w-3.5 h-3.5 mr-1.5" />
-                                Deactivate License
-                            </Button>
-                        ) : (
-                            <Button
-                                variant="default"
-                                size="sm"
-                                className="w-full h-8 text-xs"
-                                onClick={onActivateRequest}
-                            >
-                                <Key className="w-3.5 h-3.5 mr-1.5" />
-                                Activate Pro
-                            </Button>
-                        )}
-
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full h-8 text-xs text-muted-foreground"
-                            onClick={handleSignOut}
-                        >
-                            <LogOut className="w-3.5 h-3.5 mr-1.5" />
-                            Sign Out
-                        </Button>
-                    </div>
-                    <Separator />
-                </>
-            )}
+                {licenseInfo.valid ? (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-8 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/30"
+                        onClick={handleDeactivate}
+                    >
+                        <Key className="w-3.5 h-3.5 mr-1.5" />
+                        Deactivate License
+                    </Button>
+                ) : (
+                    <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full h-8 text-xs"
+                        onClick={onActivateRequest}
+                    >
+                        <Key className="w-3.5 h-3.5 mr-1.5" />
+                        Activate Pro
+                    </Button>
+                )}
+            </div>
+            <Separator />
 
             {/* API Configuration */}
             <div className="space-y-4 flex-1 overflow-y-auto">

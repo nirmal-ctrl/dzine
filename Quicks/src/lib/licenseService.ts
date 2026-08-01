@@ -4,7 +4,7 @@ export interface LicenseRecord {
   remainingDevices?: number;
 }
 
-const API_BASE_URL = process.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const VALIDATE_URL = `${API_BASE_URL}/api/validate-license`;
 
 /**
