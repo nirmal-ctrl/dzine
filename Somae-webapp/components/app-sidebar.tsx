@@ -41,17 +41,6 @@ const data = {
       icon: (
         <LayoutDashboardIcon className="size-4" />
       ),
-      isActive: true,
-      items: [
-        {
-          title: "Licenses",
-          url: "/dashboard#licenses",
-        },
-        {
-          title: "Payments",
-          url: "/dashboard#payments",
-        }
-      ],
     },
     {
       title: "Workflow Builder",
@@ -59,33 +48,13 @@ const data = {
       icon: (
         <WorkflowIcon className="size-4" />
       ),
-      items: [
-        {
-          title: "Workflow Editor",
-          url: "/dashboard/workflows",
-        },
-        {
-          title: "Execution Logs",
-          url: "/dashboard/workflows#logs",
-        }
-      ],
     },
     {
-      title: "Subscription & Licensing",
+      title: "Pricing",
       url: "/pricing",
       icon: (
         <CreditCardIcon className="size-4" />
       ),
-      items: [
-        {
-          title: "Pricing",
-          url: "/pricing",
-        },
-        {
-          title: "Buy License",
-          url: "/pricing",
-        }
-      ],
     }
   ],
   projects: [

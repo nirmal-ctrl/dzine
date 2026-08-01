@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Globe,
   Layers,
+  LayoutDashboard,
   Plus,
   Search,
   Sparkles,
@@ -164,12 +165,21 @@ export default function LandingPage() {
             </Link>
           </nav>
 
-          <Link
-            href="/pricing"
-            className="shrink-0 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.04] sm:px-6 sm:py-3 sm:text-sm"
-          >
-            Get Somae Now
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/dashboard"
+              className="hidden items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-white/20 sm:flex sm:px-5 sm:py-3 sm:text-sm"
+            >
+              <LayoutDashboard className="size-4" />
+              Dashboard
+            </Link>
+            <Link
+              href="/pricing"
+              className="rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.04] sm:px-6 sm:py-3 sm:text-sm"
+            >
+              Get Somae Now
+            </Link>
+          </div>
         </header>
 
         {/* ── Hero body ── */}
@@ -412,7 +422,7 @@ export default function LandingPage() {
             </h2>
             <p className="mt-5 text-base font-medium leading-[1.7] text-[#616161] sm:text-lg">
               No accounts to manage, no data to migrate. Three steps and
-              you're automating.
+              you&apos;re automating.
             </p>
           </div>
 
