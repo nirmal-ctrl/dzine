@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Somae",
+  "name": "Huenxt",
   "version": "1.0.0",
   "description": "Select images and generate artifacts",
   "permissions": [
@@ -18,7 +18,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Open Somae"
+    "default_title": "Open Huenxt"
   },
   "side_panel": {
     "default_path": "index.html"

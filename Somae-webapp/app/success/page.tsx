@@ -11,7 +11,7 @@ export default function SuccessPage() {
         </div>
         <h1 className="text-3xl font-bold mb-4">Payment Successful!</h1>
         <p className="text-gray-600 mb-8">
-          Thank you for your purchase. Your Somae Pro Lifetime License has been generated and sent to your email.
+          Thank you for your purchase. Your Huenxt Pro Lifetime License has been generated and sent to your email.
         </p>
         <div className="space-y-4">
           <Link

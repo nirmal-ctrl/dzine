@@ -45,7 +45,7 @@ export function LicenseView({ onSuccess }: LicenseViewProps) {
           <Key className="w-6 h-6 text-primary" />
         </div>
         <div className="text-center">
-          <h1 className="text-base font-semibold tracking-tight">Activate Somae Pro</h1>
+          <h1 className="text-base font-semibold tracking-tight">Activate Huenxt Pro</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Enter your license key to unlock premium features</p>
         </div>
       </div>

@@ -41,7 +41,7 @@ export default function SignInPage() {
               <Zap className="size-5 fill-current" />
             </span>
             <span className="text-2xl font-black tracking-tight text-white">
-              Somae
+              Huenxt
             </span>
           </Link>
         </div>
@@ -64,7 +64,7 @@ export default function SignInPage() {
 
           <div className="mt-10 rounded-2xl border border-white/15 bg-black/15 p-6 backdrop-blur-md">
             <blockquote className="text-sm font-semibold leading-relaxed text-white/90 italic">
-              &ldquo;Somae eliminated hours of tedious copy-pasting for our whole research team. Since API keys stay local in our browser, security compliance took zero time.&rdquo;
+              &ldquo;Huenxt eliminated hours of tedious copy-pasting for our whole research team. Since API keys stay local in our browser, security compliance took zero time.&rdquo;
             </blockquote>
             <div className="mt-4 flex items-center gap-3 text-xs font-bold text-blue-200">
               <div className="size-2 rounded-full bg-emerald-400" />
@@ -100,7 +100,7 @@ export default function SignInPage() {
               <Zap className="size-3.5 fill-current" />
             </span>
             <span className="text-lg font-black tracking-tighter text-black">
-              Somae
+              Huenxt
             </span>
           </Link>
         </div>
@@ -113,7 +113,7 @@ export default function SignInPage() {
             </div>
 
             <h2 className="mt-6 text-2xl font-black tracking-[-0.02em] text-zinc-900 sm:text-3xl">
-              Welcome to Somae
+              Welcome to Huenxt
             </h2>
             <p className="mt-2.5 text-sm font-medium text-zinc-500 leading-relaxed">
               Sign in to manage your lifetime license key, view device activations, and explore workflows.
@@ -158,7 +158,7 @@ export default function SignInPage() {
 
         {/* Footer legal */}
         <p className="text-center text-[11px] font-medium text-zinc-400 leading-relaxed">
-          By authenticating, you agree to Somae&apos;s{" "}
+          By authenticating, you agree to Huenxt&apos;s{" "}
           <span className="underline cursor-pointer hover:text-zinc-600">Terms of Service</span> and{" "}
           <span className="underline cursor-pointer hover:text-zinc-600">Privacy Policy</span>.
         </p>

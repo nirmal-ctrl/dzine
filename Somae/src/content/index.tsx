@@ -1,5 +1,5 @@
 // Vanilla JS Content Script for Selection Only
-console.log('Somae Content Script Loaded');
+console.log('Huenxt Content Script Loaded');
 
 let selecting = false;
 let badge: HTMLElement | null = null;

@@ -82,8 +82,8 @@ export default function PricingPage() {
         key: data.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: data.amount,
         currency: data.currency,
-        name: "Somae",
-        description: "Somae Pro Lifetime License",
+        name: "Huenxt",
+        description: "Huenxt Pro Lifetime License",
         order_id: data.id,
         handler: function () {
           router.push("/dashboard?payment=success");
@@ -135,7 +135,7 @@ export default function PricingPage() {
             <Zap className="size-4 fill-current" />
           </span>
           <span className="text-xl font-extrabold tracking-tight text-white">
-            Somae
+            Huenxt
           </span>
         </Link>
 
@@ -202,7 +202,7 @@ export default function PricingPage() {
                 </div>
 
                 <h2 className="mt-4 text-2xl font-black tracking-tight text-zinc-900">
-                  Somae Pro Lifetime
+                  Huenxt Pro Lifetime
                 </h2>
                 <p className="mt-1 text-xs font-medium text-zinc-500">
                   Everything you need for infinite browser automations.
@@ -252,7 +252,7 @@ export default function PricingPage() {
       
       {/* ── Minimal Footer ── */}
       <footer className="relative z-20 flex h-10 shrink-0 items-center justify-center gap-6 px-4 text-[11px] font-semibold tracking-wide text-white/75 sm:h-12">
-        <span>© 2026 Somae</span>
+        <span>© 2026 Huenxt</span>
         <span>·</span>
         <span className="flex items-center gap-1 text-emerald-300">
           <ShieldCheck className="size-3.5" /> 256-bit Secure Razorpay Checkout

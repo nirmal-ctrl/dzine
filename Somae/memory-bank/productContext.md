@@ -6,7 +6,7 @@ Creative professionals and enthusiasts often need to generate images for their w
 
 ## Solution
 
-**Somae** solves this problem by providing a seamless image generation experience directly within the browser. As a browser extension, it allows users to generate AI-powered images without leaving their current web page. This provides a more integrated and efficient workflow for creating visual content.
+**Huenxt** solves this problem by providing a seamless image generation experience directly within the browser. As a browser extension, it allows users to generate AI-powered images without leaving their current web page. This provides a more integrated and efficient workflow for creating visual content.
 
 ## User Experience Goals
 

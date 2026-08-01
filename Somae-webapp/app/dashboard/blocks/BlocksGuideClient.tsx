@@ -152,7 +152,7 @@ export function BlocksGuideClient({ session }: BlocksGuideClientProps) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-6">
             <div>
               <h1 className="text-3xl font-bold text-foreground tracking-tight">Automation Building Blocks</h1>
-              <p className="text-sm text-muted-foreground mt-1">Explore all premium modular tiles available in your Somae automation toolset.</p>
+              <p className="text-sm text-muted-foreground mt-1">Explore all premium modular tiles available in your Huenxt automation toolset.</p>
             </div>
             <Link href="/dashboard/workflows">
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm gap-2">

@@ -101,12 +101,15 @@ import {
 import type { NodeType, NodeData, LogEntry, AvailableTile } from "./types/workflow.types"
 import { PROVIDER_MODELS, NODE_COLORS, AVAILABLE_TILES } from "./constants/workflow.constants"
 import { resolveTemplate, resolveRawTemplate, resolveParams, cleanJsonString } from "./engine/template.engine"
+import { applyOutputMapping } from "./engine/output.mapper"
 import { topologicalSort, getUpstreamNodeIds, getDownstreamNodes, generateNodeId, hasPlaceholders, getAvailableVariables, getLoopFields, getStaticNodeFields } from "./engine/graph.utils"
 import { CustomWorkflowNode, GroupWorkflowNode, nodeTypes } from "./components/CustomWorkflowNode"
 import { WorkflowNodesContext, DroppableRichInput, DroppableInput, DroppableTextarea } from "./components/DroppableRichInput"
 import { JsonViewer, ThoughtBlock, CopyButton, DataRenderer } from "./components/JsonViewer"
 import { OutputMappingSection } from "./components/OutputMappingSection"
 import { SchemaBuilderSection } from "./components/SchemaBuilderSection"
+import { getExecutor } from "./executors/executor.registry"
+import type { ExecutionContext } from "./executors/base.executor"
 
 interface WorkflowEditorClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,7 +149,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
   const [aiGenerating, setAiGenerating] = React.useState(false)
   const [isRunning, setIsExecuting] = React.useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [logs, setLogs] = React.useState<{ id?: string, nodeId?: string, label?: string, type?: NodeType, status?: "running" | "success" | "error", message: string, data?: any }[]>([])
+  const [logs, setLogs] = React.useState<LogEntry[]>([])
   const [collapsedLogs, setCollapsedLogs] = React.useState<Record<string | number, boolean>>({})
 
   // Interactive Error Toasts State
@@ -1065,7 +1068,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
     isExecutingRef.current = true
 
     // Capture the native fetch BEFORE any Chrome extension can override window.fetch.
-    // This prevents "Failed to fetch" errors caused by the Somae extension patching
+    // This prevents "Failed to fetch" errors caused by the Huenxt extension patching
     // window.fetch — relative URLs like "/api/workflows/proxy" fail in the extension context.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nativeFetch: typeof fetch = ((globalThis as any).__nativeFetch ?? fetch).bind(globalThis)
@@ -2162,7 +2165,7 @@ export function WorkflowEditorClient({ session }: WorkflowEditorClientProps) {
                                   value={selectedNode.data.params.webhookUrl || ""}
                                   onChange={(e) => updateNodeData({ params: { ...selectedNode.data.params, webhookUrl: e.target.value } })}
                                   className="rounded-none text-xs h-9 font-mono"
-                                  placeholder="https://api.somae.ai/v1/webhook/..."
+                                  placeholder="https://api.huenxt.ai/v1/webhook/..."
                                 />
                                 <p className="text-[10px] text-muted-foreground/60">External services POST to this URL to start the workflow.</p>
                               </div>

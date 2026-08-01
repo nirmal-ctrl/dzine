@@ -79,8 +79,6 @@ export default function App() {
     topP: 0.95
   });
 
-  const [advancedMode, setAdvancedMode] = useState(false);
-
   // Auto-update aspect ratio when platform changes
   useEffect(() => {
     if (imagenConfig.aspectRatio === 'auto') {
@@ -97,12 +95,17 @@ export default function App() {
   const [pendingCropImage, setPendingCropImage] = useState<string | null>(null);
 
   useEffect(() => {
-    chrome.storage?.local.get(['images', 'somae_config', 'pending_crop', 'strategy', 'active_category'], (result) => {
+    chrome.storage?.local.get(['images', 'huenxt_config', 'somae_config', 'pending_crop', 'strategy', 'active_category'], (result) => {
       if (result.images) setImages(result.images as ImageAsset[]);
-      if (result.somae_config) setConfig(result.somae_config as AppConfig);
+      const storedConfig = result.huenxt_config || result.somae_config;
+      if (storedConfig) {
+        setConfig(storedConfig as AppConfig);
+        if (!result.huenxt_config) {
+          chrome.storage?.local.set({ huenxt_config: storedConfig });
+        }
+      }
       if (result.strategy) setStrategy(result.strategy as StrategyContext);
       if (result.active_category) setActiveCategory(result.active_category as InspirationCategory);
-      if (result.advanced_mode !== undefined) setAdvancedMode(!!result.advanced_mode);
 
       if (result.pending_crop) {
         setPendingCropImage((result.pending_crop as PendingCrop).dataUrl);
@@ -117,7 +120,6 @@ export default function App() {
           setPendingCropImage((changes.pending_crop.newValue as PendingCrop).dataUrl);
           setView('crop');
         }
-        if (changes.advanced_mode) setAdvancedMode(changes.advanced_mode.newValue);
       }
     };
     chrome.storage?.onChanged.addListener(changeListener);
@@ -125,7 +127,7 @@ export default function App() {
   }, []);
 
   const saveConfig = () => {
-    chrome.storage?.local.set({ somae_config: config });
+    chrome.storage?.local.set({ huenxt_config: config });
     setView('home');
   };
 
@@ -133,11 +135,6 @@ export default function App() {
     const newStrategy = { ...strategy, [key]: value };
     setStrategy(newStrategy);
     chrome.storage?.local.set({ strategy: newStrategy });
-  };
-
-  const toggleAdvancedMode = (enabled: boolean) => {
-    setAdvancedMode(enabled);
-    chrome.storage?.local.set({ advanced_mode: enabled });
   };
 
   const startSelection = async (category: InspirationCategory) => {
@@ -750,7 +747,7 @@ export default function App() {
           <div className="bg-primary/10 p-1 rounded-md">
             <Wand2 className="w-4 h-4 text-primary" />
           </div>
-          <h1 className="text-sm font-semibold tracking-tight">Somae Design</h1>
+          <h1 className="text-sm font-semibold tracking-tight">Huenxt Design</h1>
         </div>
         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setView('settings')}>
           <Settings className="w-4 h-4" />
@@ -765,8 +762,6 @@ export default function App() {
           <Separator />
 
           <InspirationSection
-            advancedMode={advancedMode}
-            onToggleMode={toggleAdvancedMode}
             images={images}
             onSelectCategory={startSelection}
             onDeleteImage={deleteImage}

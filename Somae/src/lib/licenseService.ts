@@ -6,16 +6,22 @@ export interface LicenseRecord {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const VALIDATE_URL = `${API_BASE_URL}/api/validate-license`;
+const DEVICE_HASH_KEY = 'huenxt_device_hash';
+const LEGACY_DEVICE_HASH_KEY = 'somae_device_hash';
+const LICENSE_KEY = 'huenxt_license_key';
+const LEGACY_LICENSE_KEY = 'somae_license_key';
+const LICENSE_VALID_KEY = 'huenxt_license_valid';
+const LEGACY_LICENSE_VALID_KEY = 'somae_license_valid';
 
 /**
  * Get or generate a unique device hash for this installation.
  */
 function getDeviceHash(): string {
-  let hash = localStorage.getItem('somae_device_hash');
+  let hash = localStorage.getItem(DEVICE_HASH_KEY) || localStorage.getItem(LEGACY_DEVICE_HASH_KEY);
   if (!hash) {
     hash = crypto.randomUUID();
-    localStorage.setItem('somae_device_hash', hash);
   }
+  localStorage.setItem(DEVICE_HASH_KEY, hash);
   return hash;
 }
 
@@ -42,11 +48,12 @@ export async function validateLicense(licenseKey: string): Promise<{ valid: bool
 
     if (json.valid) {
       // Save locally
-      localStorage.setItem('somae_license_key', licenseKey);
-      localStorage.setItem('somae_license_valid', 'true');
+      localStorage.setItem(LICENSE_KEY, licenseKey);
+      localStorage.setItem(LICENSE_VALID_KEY, 'true');
       return { valid: true, remainingDevices: json.remaining_devices };
     } else {
-      localStorage.removeItem('somae_license_valid');
+      localStorage.removeItem(LICENSE_VALID_KEY);
+      localStorage.removeItem(LEGACY_LICENSE_VALID_KEY);
       return { valid: false, message: json.message };
     }
   } catch (err) {
@@ -62,12 +69,16 @@ export async function validateLicense(licenseKey: string): Promise<{ valid: bool
  * This can be used for quick UI checks.
  */
 export function isLocallyLicensed(): boolean {
-  return localStorage.getItem('somae_license_valid') === 'true';
+  return localStorage.getItem(LICENSE_VALID_KEY) === 'true' || localStorage.getItem(LEGACY_LICENSE_VALID_KEY) === 'true';
 }
 
 /**
  * Get the stored license key.
  */
 export function getStoredLicenseKey(): string | null {
-  return localStorage.getItem('somae_license_key');
+  const licenseKey = localStorage.getItem(LICENSE_KEY) || localStorage.getItem(LEGACY_LICENSE_KEY);
+  if (licenseKey) {
+    localStorage.setItem(LICENSE_KEY, licenseKey);
+  }
+  return licenseKey;
 }

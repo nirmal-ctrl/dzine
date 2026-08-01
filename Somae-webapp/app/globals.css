@@ -56,7 +56,7 @@
   --card-foreground: oklch(0.18 0.015 240);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.015 240);
-  --primary: #0865ff; /* Somae signature blue */
+  --primary: #0865ff; /* Huenxt signature blue */
   --primary-foreground: #ffffff;
   --secondary: #f8f8f8;
   --secondary-foreground: #000000;
@@ -73,7 +73,7 @@
   --chart-3: oklch(0.7 0.12 140);
   --chart-4: oklch(0.75 0.15 40);
   --chart-5: oklch(0.8 0.18 10);
-  --radius: 1rem; /* Generous rounding — Somae design language */
+  --radius: 1rem; /* Generous rounding — Huenxt design language */
   --sidebar: oklch(0.985 0.005 240);
   --sidebar-foreground: oklch(0.2 0.015 240);
   --sidebar-primary: #0865ff;
@@ -91,7 +91,7 @@
   --card-foreground: oklch(0.98 0.005 240);
   --popover: oklch(0.15 0.02 240);
   --popover-foreground: oklch(0.98 0.005 240);
-  --primary: #3984ff; /* Lighter Somae blue for dark mode */
+  --primary: #3984ff; /* Lighter Huenxt blue for dark mode */
   --primary-foreground: #ffffff;
   --secondary: oklch(0.22 0.02 240);
   --secondary-foreground: oklch(0.92 0.01 240);

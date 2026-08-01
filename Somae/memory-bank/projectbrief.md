@@ -1,6 +1,6 @@
-# Project Brief: Somae
+# Project Brief: Huenxt
 
-**Somae** is a browser extension that provides AI-powered image generation capabilities directly in the browser. It allows users to generate images based on textual prompts and configurations.
+**Huenxt** is a browser extension that provides AI-powered image generation capabilities directly in the browser. It allows users to generate images based on textual prompts and configurations.
 
 ## Core Requirements
 

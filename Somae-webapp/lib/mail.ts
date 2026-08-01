@@ -20,9 +20,9 @@ export async function sendLicenseEmail(email: string, name: string, licenseKey: 
               Name: name,
             },
           ],
-          Subject: "Your Somae Lifetime License Key",
+          Subject: "Your Huenxt Lifetime License Key",
           HTMLPart: `
-            <h3>Thank you for purchasing Somae Pro!</h3>
+            <h3>Thank you for purchasing Huenxt Pro!</h3>
             <p>Hi ${name},</p>
             <p>Your payment has been successfully processed. Here is your lifetime license key:</p>
             <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; border-radius: 8px;">
@@ -30,12 +30,12 @@ export async function sendLicenseEmail(email: string, name: string, licenseKey: 
             </div>
             <p><strong>Next Steps:</strong></p>
             <ol>
-              <li>Open the Somae Chrome Extension.</li>
+              <li>Open the Huenxt Chrome Extension.</li>
               <li>Go to the activation screen.</li>
               <li>Paste your license key to unlock all premium features.</li>
             </ol>
             <p>If you have any questions, feel free to reply to this email.</p>
-            <p>Best regards,<br />The Somae Team</p>
+            <p>Best regards,<br />The Huenxt Team</p>
           `,
         },
       ],

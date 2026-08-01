@@ -29,7 +29,6 @@ export function GenerationTraceView({
     const [refiningImage, setRefiningImage] = useState<string | null>(null);
     const [refinePrompt, setRefinePrompt] = useState('');
     const [inspirationImages, setInspirationImages] = useState<ImageAsset[]>([]);
-    const [advancedMode, setAdvancedMode] = useState(false);
 
     // Auto-scroll to current step
     useEffect(() => {
@@ -231,7 +230,7 @@ export function GenerationTraceView({
                                                     onClick={() => {
                                                         const link = document.createElement('a');
                                                         link.href = imageUrl;
-                                                        link.download = `somae-design-v${index + 1}-${Date.now()}.png`;
+                                                        link.download = `huenxt-design-v${index + 1}-${Date.now()}.png`;
                                                         document.body.appendChild(link);
                                                         link.click();
                                                         document.body.removeChild(link);
@@ -284,8 +283,6 @@ export function GenerationTraceView({
 
                                                 <div className="space-y-2">
                                                     <InspirationSection
-                                                        advancedMode={advancedMode}
-                                                        onToggleMode={setAdvancedMode}
                                                         images={inspirationImages}
                                                         onSelectCategory={() => { }}
                                                         onDeleteImage={handleDeleteImage}

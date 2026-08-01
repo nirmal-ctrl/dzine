@@ -23,11 +23,11 @@ import {
   Settings2Icon
 } from "lucide-react"
 
-// This is sample data customized for Somae.
+// This is sample data customized for Huenxt.
 const data = {
   teams: [
     {
-      name: "Somae",
+      name: "Huenxt",
       logo: (
         <SparklesIcon className="size-4" />
       ),
@@ -93,7 +93,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const defaultUser = {
     name: "User",
-    email: "user@somae.ai",
+    email: "user@huenxt.ai",
     avatar: "https://avatar.iran.liara.run/public/32"
   }
 

@@ -113,7 +113,7 @@ export default async function DashboardPage() {
                 href="/pricing"
                 className="inline-flex items-center gap-2 rounded-full bg-[#0865ff] px-5 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(8,101,255,0.35)] transition-transform hover:scale-[1.03]"
               >
-                <Zap className="size-4" /> Buy Somae Pro
+                <Zap className="size-4" /> Buy Huenxt Pro
               </Link>
             </div>
 
@@ -134,7 +134,7 @@ export default async function DashboardPage() {
                     href="/pricing"
                     className="mt-6 inline-block rounded-full bg-black px-8 py-3 text-sm font-bold text-white transition-transform hover:scale-[1.03] dark:bg-[#0865ff]"
                   >
-                    Buy Somae Pro
+                    Buy Huenxt Pro
                   </Link>
                 </div>
               ) : (

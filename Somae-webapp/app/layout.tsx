@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Somae - Premium AI Automation",
+  title: "Huenxt - Premium AI Automation",
   description: "Ultimate Chrome extension for premium AI-driven automation.",
 };
 

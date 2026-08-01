@@ -25,6 +25,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     const handleDeactivate = () => {
         if (confirm('Are you sure you want to deactivate this license on this device?')) {
+            localStorage.removeItem('huenxt_license_valid');
+            localStorage.removeItem('huenxt_license_key');
             localStorage.removeItem('somae_license_valid');
             localStorage.removeItem('somae_license_key');
             window.location.reload();
@@ -50,7 +52,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
                     }`}>
                     <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                    <span className="font-medium">{licenseInfo.valid ? 'Somae Pro' : 'Free Version'}</span>
+                    <span className="font-medium">{licenseInfo.valid ? 'Huenxt Pro' : 'Free Version'}</span>
                     {licenseInfo.valid && licenseInfo.remainingDevices !== null && (
                         <span className="ml-auto text-muted-foreground">
                             {licenseInfo.remainingDevices} devices left

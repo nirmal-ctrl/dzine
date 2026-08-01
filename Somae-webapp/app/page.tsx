@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   Bell,
@@ -52,7 +53,7 @@ const steps = [
     step: "01",
     title: "Install the extension",
     description:
-      "Add Somae to Chrome in one click and activate your lifetime license.",
+      "Add Huenxt to Chrome in one click and activate your lifetime license.",
   },
   {
     step: "02",
@@ -71,7 +72,7 @@ const steps = [
 const testimonials = [
   {
     quote:
-      "Somae replaced three different tools for me. I summarize research, extract data, and draft replies without ever leaving the tab I'm in.",
+      "Huenxt replaced three different tools for me. I summarize research, extract data, and draft replies without ever leaving the tab I'm in.",
     name: "Sarah Chen",
     role: "Product Marketing Lead",
     initials: "SC",
@@ -99,7 +100,7 @@ const faqs = [
   {
     question: "Do I need my own API keys?",
     answer:
-      "Yes. Somae follows a bring-your-own-keys model. Connect OpenAI, Anthropic, or Gemini keys — they stay stored locally in your browser and are never sent to our servers.",
+      "Yes. Huenxt follows a bring-your-own-keys model. Connect OpenAI, Anthropic, or Gemini keys — they stay stored locally in your browser and are never sent to our servers.",
   },
   {
     question: "Is this really a one-time payment?",
@@ -114,7 +115,7 @@ const faqs = [
   {
     question: "Does my browsing data leave my machine?",
     answer:
-      "No. Page content is sent directly from your browser to the AI provider you configured. Somae never proxies, stores, or sees your data.",
+      "No. Page content is sent directly from your browser to the AI provider you configured. Huenxt never proxies, stores, or sees your data.",
   },
   {
     question: "Can I build workflows without coding?",
@@ -138,13 +139,15 @@ export default function LandingPage() {
 
         {/* ── Nav ── */}
         <header className="relative z-30 mx-auto flex w-full max-w-[1280px] items-center justify-between gap-3 px-5 pt-6 sm:px-10 sm:pt-7">
-          <Link href="/" className="flex shrink-0 items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-white text-[#0865ff]">
-              <Zap className="size-4.5 fill-current" />
-            </span>
-            <span className="text-xl font-bold tracking-tight text-white">
-              Somae
-            </span>
+          <Link href="/" className="flex shrink-0 items-center">
+            <Image
+              src="/logo.png"
+              alt="Huenxt"
+              width={168}
+              height={64}
+              priority
+              className="h-10 w-auto rounded-md"
+            />
           </Link>
 
           <nav className="hidden items-center gap-2 md:flex">
@@ -177,7 +180,7 @@ export default function LandingPage() {
               href="/pricing"
               className="rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.04] sm:px-6 sm:py-3 sm:text-sm"
             >
-              Get Somae Now
+              Get Huenxt Now
             </Link>
           </div>
         </header>
@@ -264,7 +267,7 @@ export default function LandingPage() {
                     <span className="size-2.5 rounded-full bg-[#28c840]" />
                   </div>
                   <div className="flex h-6 w-36 items-center justify-center rounded-md bg-white text-[10px] font-medium text-[#616161] shadow-sm sm:w-44">
-                    <Search className="mr-1.5 size-3" /> Somae.ai
+                    <Search className="mr-1.5 size-3" /> Huenxt.ai
                   </div>
                   <div className="w-10" />
                 </div>
@@ -455,7 +458,7 @@ export default function LandingPage() {
               Loved by power users
             </h2>
             <p className="mt-5 text-base font-medium leading-[1.7] text-[#616161] sm:text-lg">
-              Professionals who live in the browser trust Somae to handle
+              Professionals who live in the browser trust Huenxt to handle
               the busywork.
             </p>
           </div>
@@ -506,7 +509,7 @@ export default function LandingPage() {
               <Sparkles className="size-3.5" /> Lifetime deal
             </span>
             <h3 className="mt-6 text-xl font-semibold tracking-[-0.01em] sm:text-2xl">
-              Somae Pro
+              Huenxt Pro
             </h3>
             <p className="mt-2 font-medium text-[#616161]">
               Everything, forever. For individuals and power users.
@@ -595,14 +598,14 @@ export default function LandingPage() {
               Stop repeating yourself on the web
             </h2>
             <p className="mx-auto mt-6 max-w-[520px] text-base font-medium leading-[1.7] text-white/80 sm:text-lg">
-              Join the professionals who let Somae handle the busywork —
+              Join the professionals who let Huenxt handle the busywork —
               securely, privately, and right inside Chrome.
             </p>
             <Link
               href="/pricing"
               className="mt-10 inline-flex h-14 items-center justify-center gap-2 rounded-full bg-white px-8 text-sm font-bold text-black shadow-[0_8px_24px_rgba(0,0,0,0.2)] transition-transform hover:scale-[1.04] sm:px-10 sm:text-base"
             >
-              Get Somae for ₹4,999 <ArrowRight className="size-4" />
+              Get Huenxt for ₹4,999 <ArrowRight className="size-4" />
             </Link>
           </div>
         </div>
@@ -613,11 +616,14 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[1280px] px-5 py-14 sm:px-10 sm:py-16">
           <div className="flex flex-col justify-between gap-10 sm:gap-12 md:flex-row">
             <div className="max-w-[280px]">
-              <Link href="/" className="flex items-center gap-2.5">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-[#0865ff] text-white">
-                  <Zap className="size-4.5 fill-current" />
-                </span>
-                <span className="text-xl font-bold tracking-tight">Somae</span>
+              <Link href="/" className="flex items-center">
+                <Image
+                  src="/logo.png"
+                  alt="Huenxt"
+                  width={168}
+                  height={64}
+                  className="h-10 w-auto rounded-md"
+                />
               </Link>
               <p className="mt-5 font-medium leading-[1.7] text-[#616161]">
                 Premium AI automation for Chrome. Your keys, your data, your
@@ -666,7 +672,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-black/5 pt-8 text-center text-sm font-medium text-[#616161] sm:mt-14 sm:flex-row sm:text-left">
-            <p>© {new Date().getFullYear()} Somae.ai. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Huenxt.ai. All rights reserved.</p>
             <p>Built as a Chrome Extension</p>
           </div>
         </div>

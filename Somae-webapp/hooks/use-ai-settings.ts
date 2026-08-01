@@ -26,15 +26,20 @@ const DEFAULT_SETTINGS: AiSettings = {
   }
 }
 
+const SETTINGS_STORAGE_KEY = "huenxt_ai_settings"
+const LEGACY_SETTINGS_STORAGE_KEY = "somae_ai_settings"
+
 export function useAiSettings() {
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_SETTINGS)
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("somae_ai_settings")
+      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY) || localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY)
       if (stored) {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) })
+        const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) }
+        setSettings(parsed)
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(parsed))
       }
     } catch (e) {
       console.error("Failed to load AI settings from localStorage", e)
@@ -46,7 +51,7 @@ export function useAiSettings() {
     setSettings(prev => {
       const updated = { ...prev, ...newSettings }
       try {
-        localStorage.setItem("somae_ai_settings", JSON.stringify(updated))
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated))
       } catch (e) {
         console.error("Failed to save AI settings to localStorage", e)
       }
@@ -64,7 +69,7 @@ export function useAiSettings() {
         }
       }
       try {
-        localStorage.setItem("somae_ai_settings", JSON.stringify(updated))
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated))
       } catch (e) {
         console.error("Failed to save AI settings to localStorage", e)
       }

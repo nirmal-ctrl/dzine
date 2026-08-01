@@ -25,12 +25,11 @@ export function GeneratedImageView({
     const [isRefining, setIsRefining] = useState(false);
     const [refinePrompt, setRefinePrompt] = useState('');
     const [inspirationImages, setInspirationImages] = useState<ImageAsset[]>([]);
-    const [advancedMode, setAdvancedMode] = useState(false);
 
     const handleDownload = () => {
         const link = document.createElement('a');
         link.href = imageUrl;
-        link.download = `somae-design-${Date.now()}.png`;
+        link.download = `huenxt-design-${Date.now()}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -106,8 +105,6 @@ export function GeneratedImageView({
 
                             <div className="space-y-2">
                                 <InspirationSection
-                                    advancedMode={advancedMode}
-                                    onToggleMode={setAdvancedMode}
                                     images={inspirationImages}
                                     onSelectCategory={() => { }} // Category selection not needed for simple upload
                                     onDeleteImage={handleDeleteImage}

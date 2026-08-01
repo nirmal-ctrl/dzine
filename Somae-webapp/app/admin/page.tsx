@@ -56,7 +56,7 @@ export default async function AdminPage() {
     <div className="flex flex-col min-h-screen bg-gray-100">
       <header className="px-4 lg:px-6 h-14 flex items-center border-b bg-white">
         <Link className="flex items-center justify-center" href="/">
-          <span className="font-bold text-2xl tracking-tighter text-black">Somae Admin</span>
+          <span className="font-bold text-2xl tracking-tighter text-black">Huenxt Admin</span>
         </Link>
         <nav className="ml-auto flex gap-4 sm:gap-6">
           <Link className="text-sm font-medium hover:underline underline-offset-4 text-black" href="/dashboard">
