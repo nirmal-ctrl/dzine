@@ -143,10 +143,10 @@ export default function LandingPage() {
             <Image
               src="/logo.png"
               alt="Huenxt"
-              width={168}
-              height={64}
+              width={224}
+              height={86}
               priority
-              className="h-10 w-auto rounded-md"
+              className="h-14 w-auto rounded-md"
             />
           </Link>
 
@@ -620,9 +620,9 @@ export default function LandingPage() {
                 <Image
                   src="/logo.png"
                   alt="Huenxt"
-                  width={168}
-                  height={64}
-                  className="h-10 w-auto rounded-md"
+                  width={224}
+                  height={86}
+                  className="h-14 w-auto rounded-md"
                 />
               </Link>
               <p className="mt-5 font-medium leading-[1.7] text-[#616161]">
