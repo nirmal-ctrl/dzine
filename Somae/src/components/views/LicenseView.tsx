@@ -31,7 +31,7 @@ export function LicenseView({ onSuccess }: LicenseViewProps) {
       } else {
         setError(result.message || 'Invalid license key.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to connect to validation server.');
     } finally {
       setLoading(false);
@@ -41,11 +41,11 @@ export function LicenseView({ onSuccess }: LicenseViewProps) {
   return (
     <div className="flex flex-col h-screen bg-background">
       <div className="flex flex-col items-center gap-3 pt-10 pb-6 px-6 border-b border-border">
-        <div className="bg-primary/10 p-3 rounded-xl">
-          <Key className="w-6 h-6 text-primary" />
+        <div className="bg-somae-blue/10 p-3 rounded-xl">
+          <Key className="w-6 h-6 text-somae-blue" />
         </div>
         <div className="text-center">
-          <h1 className="text-base font-semibold tracking-tight">Activate Huenxt Pro</h1>
+          <h1 className="text-base font-semibold tracking-tight">Activate Somae Pro</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Enter your license key to unlock premium features</p>
         </div>
       </div>

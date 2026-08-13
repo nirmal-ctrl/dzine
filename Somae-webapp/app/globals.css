@@ -39,78 +39,95 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-ai: var(--ai);
+  --color-royal: var(--royal);
+  --color-azure: var(--azure);
+  --color-sky: var(--sky);
+  --color-mist: var(--mist);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.2);
+  --radius-2xl: calc(var(--radius) * 1.4);
+  --radius-3xl: calc(var(--radius) * 1.8);
+  --radius-4xl: calc(var(--radius) * 2.2);
 }
 
 :root {
-  --font-sans: var(--font-poppins), sans-serif;
-  --background: oklch(0.99 0.005 240);
-  --foreground: oklch(0.18 0.015 240);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.015 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.015 240);
-  --primary: #0865ff; /* Huenxt signature blue */
+  /* ── Somae Design System ───────────────────────────── */
+  --font-sans: var(--font-open-sans), "Open Sans", sans-serif;
+
+  /* Brand blues */
+  --royal: #2b5ce6; /* Royal Blue */
+  --azure: #3e8bff; /* Azure Blue */
+  --sky: #7fb3ff; /* Sky Blue */
+  --mist: #eaf3ff; /* Soft White-Blue */
+  --ai: #b6f500; /* Functional AI accent — use sparingly */
+
+  --background: #f5f9ff;
+  --foreground: #101c3d;
+  --card: #ffffff;
+  --card-foreground: #101c3d;
+  --popover: #ffffff;
+  --popover-foreground: #101c3d;
+  --primary: #2e6bff;
   --primary-foreground: #ffffff;
-  --secondary: #f8f8f8;
-  --secondary-foreground: #000000;
-  --muted: #f8f8f8;
-  --muted-foreground: #616161;
+  --secondary: #eef4ff;
+  --secondary-foreground: #2b5ce6;
+  --muted: #f2f6fd;
+  --muted-foreground: #5c6b8a;
   --accent: #eef4ff;
-  --accent-foreground: #0865ff;
-  --destructive: oklch(0.58 0.21 28);
-  --border: oklch(0.92 0.01 240);
-  --input: oklch(0.92 0.01 240);
-  --ring: rgb(8 101 255 / 30%);
-  --chart-1: #0865ff;
-  --chart-2: #ff7442;
-  --chart-3: oklch(0.7 0.12 140);
-  --chart-4: oklch(0.75 0.15 40);
-  --chart-5: oklch(0.8 0.18 10);
-  --radius: 1rem; /* Generous rounding — Huenxt design language */
-  --sidebar: oklch(0.985 0.005 240);
-  --sidebar-foreground: oklch(0.2 0.015 240);
-  --sidebar-primary: #0865ff;
+  --accent-foreground: #2b5ce6;
+  --destructive: #e5484d;
+  --border: #e3ebf7;
+  --input: #e3ebf7;
+  --ring: rgb(46 107 255 / 30%);
+  --chart-1: #2e6bff;
+  --chart-2: #7fb3ff;
+  --chart-3: #22c55e;
+  --chart-4: #f59e0b;
+  --chart-5: #a855f7;
+
+  /* Generous rounding — 20px base (cards 20–28px) */
+  --radius: 1.25rem;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #3d4c6d;
+  --sidebar-primary: #2e6bff;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #eef4ff;
-  --sidebar-accent-foreground: #0865ff;
-  --sidebar-border: oklch(0.93 0.01 240);
-  --sidebar-ring: rgb(8 101 255 / 30%);
+  --sidebar-accent-foreground: #2b5ce6;
+  --sidebar-border: #e9f0fb;
+  --sidebar-ring: rgb(46 107 255 / 30%);
 }
 
 .dark {
-  --background: oklch(0.12 0.015 240);
-  --foreground: oklch(0.98 0.005 240);
-  --card: oklch(0.15 0.02 240);
-  --card-foreground: oklch(0.98 0.005 240);
-  --popover: oklch(0.15 0.02 240);
-  --popover-foreground: oklch(0.98 0.005 240);
-  --primary: #3984ff; /* Lighter Huenxt blue for dark mode */
+  --background: #0a1128;
+  --foreground: #eef4ff;
+  --card: #101a3a;
+  --card-foreground: #eef4ff;
+  --popover: #101a3a;
+  --popover-foreground: #eef4ff;
+  --primary: #5c8dff;
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.22 0.02 240);
-  --secondary-foreground: oklch(0.92 0.01 240);
-  --muted: oklch(0.2 0.02 240);
-  --muted-foreground: oklch(0.65 0.01 240);
-  --accent: rgb(8 101 255 / 18%);
-  --accent-foreground: #6ea3ff;
-  --destructive: oklch(0.48 0.18 28);
-  --border: oklch(0.22 0.02 240);
-  --input: oklch(0.22 0.02 240);
-  --ring: rgb(57 132 255 / 40%);
-  --sidebar: oklch(0.14 0.02 240);
-  --sidebar-foreground: oklch(0.92 0.005 240);
-  --sidebar-primary: #3984ff;
+  --secondary: #182446;
+  --secondary-foreground: #eef4ff;
+  --muted: #182446;
+  --muted-foreground: #8fa1c7;
+  --accent: rgb(46 107 255 / 18%);
+  --accent-foreground: #8db4ff;
+  --destructive: #e5484d;
+  --border: #1c2a52;
+  --input: #1c2a52;
+  --ring: rgb(92 141 255 / 40%);
+  --sidebar: #0d1531;
+  --sidebar-foreground: #b9c6e4;
+  --sidebar-primary: #5c8dff;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgb(8 101 255 / 16%);
-  --sidebar-accent-foreground: #6ea3ff;
-  --sidebar-border: oklch(0.22 0.02 240);
-  --sidebar-ring: rgb(57 132 255 / 40%);
+  --sidebar-accent: rgb(46 107 255 / 16%);
+  --sidebar-accent-foreground: #8db4ff;
+  --sidebar-border: #1c2a52;
+  --sidebar-ring: rgb(92 141 255 / 40%);
 }
 
 @layer base {
@@ -119,13 +136,127 @@
   }
   body {
     @apply bg-background text-foreground;
+    letter-spacing: -0.011em;
   }
   html {
     @apply font-sans;
   }
+  ::selection {
+    background: rgb(46 107 255 / 18%);
+  }
 }
 
-/* ─────────────── Aesthetic utilities ─────────────── */
+/* ─────────────── Somae signature surfaces ─────────────── */
+
+/* Hero gradient: Royal → Azure → Sky → Soft White */
+.bg-somae-hero {
+  background: linear-gradient(
+    178deg,
+    #2b5ce6 0%,
+    #3572f0 28%,
+    #4a8dff 55%,
+    #8db9ff 82%,
+    #eaf3ff 100%
+  );
+}
+
+/* Subtle dashboard canvas */
+.bg-somae-canvas {
+  background: linear-gradient(180deg, #f7faff 0%, #f2f7ff 100%);
+}
+
+/* Frosted glass */
+.glass {
+  background: rgb(255 255 255 / 62%);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+.glass-strong {
+  background: rgb(255 255 255 / 82%);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+
+/* Soft elevation scale */
+.shadow-soft {
+  box-shadow:
+    0 1px 2px rgb(16 28 61 / 4%),
+    0 8px 24px -10px rgb(46 107 255 / 10%);
+}
+.shadow-lift {
+  box-shadow:
+    0 2px 4px rgb(16 28 61 / 5%),
+    0 18px 44px -14px rgb(46 107 255 / 20%);
+}
+.shadow-glow {
+  box-shadow:
+    0 0 0 1px rgb(46 107 255 / 10%),
+    0 12px 40px -8px rgb(46 107 255 / 28%);
+}
+.shadow-hero {
+  box-shadow:
+    0 2px 6px rgb(16 28 61 / 6%),
+    0 40px 90px -24px rgb(30 64 175 / 45%);
+}
+
+/* Card hover choreography */
+.card-interactive {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.card-interactive:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow:
+    0 0 0 1px rgb(46 107 255 / 12%),
+    0 18px 48px -12px rgb(46 107 255 / 26%);
+}
+
+/* Animated blueprint grid on hero */
+.bg-blueprint-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 7%) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 7%) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, black 30%, transparent 75%);
+  animation: grid-pan 24s linear infinite;
+}
+
+/* Faded æ watermark */
+.ae-watermark {
+  -webkit-text-stroke: 1.5px rgb(255 255 255 / 14%);
+  color: transparent;
+  user-select: none;
+}
+.ae-watermark-blue {
+  -webkit-text-stroke: 1.5px rgb(46 107 255 / 10%);
+  color: transparent;
+  user-select: none;
+}
+
+/* AI accent dot pulse */
+@keyframes ai-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(182 245 0 / 45%);
+  }
+  60% {
+    box-shadow: 0 0 0 7px rgb(182 245 0 / 0%);
+  }
+}
+.ai-pulse {
+  animation: ai-pulse 2.4s ease-out infinite;
+}
+
+@keyframes grid-pan {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 72px 72px;
+  }
+}
+
 @keyframes aurora-drift {
   0%,
   100% {
@@ -149,12 +280,36 @@
   }
 }
 
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes shimmer-sweep {
   0% {
     background-position: -200% center;
   }
   100% {
     background-position: 200% center;
+  }
+}
+
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
   }
 }
 
@@ -168,8 +323,31 @@
   .animate-float-soft {
     animation: float-soft 6s ease-in-out infinite;
   }
+  .animate-rise-in {
+    animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
   .text-shimmer {
     background-size: 200% auto;
     animation: shimmer-sweep 6s linear infinite;
+  }
+  .typing-dot {
+    animation: typing-dot 1.2s ease-in-out infinite;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pretty-scroll::-webkit-scrollbar {
+    width: 5px;
+  }
+  .pretty-scroll::-webkit-scrollbar-thumb {
+    background: rgb(46 107 255 / 16%);
+    border-radius: 99px;
+  }
+  .pretty-scroll::-webkit-scrollbar-track {
+    background: transparent;
   }
 }

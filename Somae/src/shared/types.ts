@@ -20,6 +20,8 @@ export interface AppConfig {
     projectId?: string;
     location?: string;
     googleCloudToken?: string;
+    /** Image generation engine: Gemini 3 Pro Image (supports references) or Imagen 4.0 (text-only) */
+    imageEngine?: 'gemini' | 'imagen';
 }
 
 export interface PendingCrop {
@@ -67,4 +69,56 @@ export interface LicenseStatus {
     valid: boolean;
     updatesUntil: Date | null;
     daysRemaining: number | null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Somae — Private Beta 01 (Creative Workflow)
+// ─────────────────────────────────────────────────────────────
+
+export type ContentTypeId = 'instagram' | 'linkedin' | 'facebook' | 'more';
+
+export type MarketingGoalId = 'launch' | 'sale' | 'gtm' | 'offer';
+
+export type CreativeStyleId = 'premium' | 'bold' | 'minimal' | 'luxury';
+
+export type QualityTierId = 'standard' | 'high' | '4k';
+
+export type FeedbackRating = 'great' | 'good' | 'not-bad' | 'bad';
+
+/** Persisted brand profile — uploaded once, reused for every generation */
+export interface BrandProfile {
+    name: string;
+    logoDataUrl: string | null;
+    updatedAt: number;
+}
+
+/** The user's creative brief (Create screen state) */
+export interface CreativeBrief {
+    contentType: ContentTypeId;
+    goal: MarketingGoalId;
+    description: string;
+    style: CreativeStyleId;
+    referenceDataUrl: string | null;
+    quality: QualityTierId;
+}
+
+export type GeneratedAssetKind = 'original' | 'variant' | 'refinement' | 'remake';
+
+/** A single generated image within a generation session */
+export interface GeneratedAsset {
+    id: string;
+    dataUrl: string;
+    kind: GeneratedAssetKind;
+    /** The refinement instruction that produced this asset (if any) */
+    refinementNote?: string;
+    createdAt: number;
+    feedback?: FeedbackRating;
+}
+
+/** A generation session — the brief snapshot plus every asset produced from it */
+export interface Generation {
+    id: string;
+    createdAt: number;
+    brief: CreativeBrief;
+    assets: GeneratedAsset[];
 }

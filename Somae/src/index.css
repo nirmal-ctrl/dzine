@@ -4,58 +4,52 @@
 
 @layer base {
   :root {
+    /* Clean white canvas — white dominates, blue is the accent */
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    /* Near-black ink — Somae #0C0C0C */
+    --foreground: 0 0% 5%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 0 0% 5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 0 0% 5%;
+    /* Primary accent — Somae blue #08C2FF */
+    --primary: 195 100% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 24% 96%;
+    --secondary-foreground: 0 0% 5%;
+    --muted: 210 24% 96%;
+    --muted-foreground: 215 12% 46%;
+    /* Selected tint — soft cyan */
+    --accent: 196 100% 95%;
+    --accent-foreground: 197 100% 34%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
+    /* Soft neutral borders */
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 195 100% 52%;
+    --radius: 1rem;
+    --chart-1: 195 100% 52%;
+    --chart-2: 25 95% 53%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem
-  }
 
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%
+    /* Somae brand tokens */
+    --somae-blue: 195 100% 52%; /* #08C2FF */
+    --somae-blue-dark: 197 100% 40%;
+    --somae-blue-tint: 196 100% 95%;
+    --somae-warm: 40 100% 97%; /* #FFFAF0 */
+    --somae-ink: 0 0% 5%; /* #0C0C0C */
+    --somae-orange: 25 95% 53%;
+    --somae-canvas: 40 100% 97%;
+
+    /* Legacy sidebar tokens (unused in extension shell) */
+    --sidebar: 224 57% 7%;
+    --sidebar-foreground: 217 16% 68%;
+    --sidebar-card: 222 44% 11%;
+    --sidebar-border: 221 32% 17%;
+    --sidebar-muted: 218 14% 52%;
   }
 }
 
@@ -64,13 +58,358 @@
     @apply border-border;
   }
 
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(36 18% 84%) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(36 18% 84%);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Somae ambient surfaces
+   ───────────────────────────────────────────────────────────── */
+
+/* Creation page — white canvas with a whisper of #08C2FF atmosphere */
+.bg-somae-create {
+  background:
+    radial-gradient(52% 38% at 84% 2%, rgb(8 194 255 / 0.12), transparent 70%),
+    radial-gradient(38% 28% at 2% 26%, rgb(8 194 255 / 0.05), transparent 70%),
+    linear-gradient(180deg, #ffffff 0%, #ffffff 62%, #f7fcff 100%);
+}
+
+/* Results page — calm, clean white */
+.bg-somae-result {
+  background:
+    radial-gradient(46% 30% at 90% 0%, rgb(8 194 255 / 0.04), transparent 70%),
+    linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+}
+
+/* Frosted surfaces */
+.glass-soft {
+  background: rgb(255 255 255 / 72%);
+  backdrop-filter: blur(16px) saturate(1.35);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+}
+.glass-faint {
+  background: rgb(255 255 255 / 52%);
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
+}
+
+/* ── Somae avatar motion — slow, subtle, premium ── */
+
+.avatar-breathe {
+  animation: avatar-breathe 6.8s ease-in-out infinite;
+  will-change: transform;
+}
+.avatar-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: avatar-blink 5.4s ease-in-out infinite;
+}
+.avatar-arms {
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: avatar-sway 8.5s ease-in-out infinite;
+}
+
+/* Thinking cloud dots */
+.cloud-dot {
+  animation: cloud-dot 1.5s ease-in-out infinite;
+}
+
+/* Ambient background drift for the generation page */
+.ambient-orb {
+  animation: ambient-drift 18s ease-in-out infinite;
+  will-change: transform;
+}
+.ambient-orb-slow {
+  animation: ambient-drift 26s ease-in-out infinite reverse;
+  will-change: transform;
+}
+
+@keyframes avatar-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.012);
+  }
+}
+
+@keyframes avatar-blink {
+  0%,
+  91%,
+  100% {
+    transform: scaleY(1);
+  }
+  94.5%,
+  96.5% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes avatar-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(1.6deg);
+  }
+}
+
+@keyframes cloud-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@keyframes ambient-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -5%, 0) scale(1.06);
+  }
+  66% {
+    transform: translate3d(-4%, 4%, 0) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-breathe,
+  .avatar-eyes,
+  .avatar-arms,
+  .cloud-dot,
+  .ambient-orb,
+  .ambient-orb-slow {
+    animation: none;
   }
 }
 
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Somae Glow Orb (kept for compatibility)
+   ───────────────────────────────────────────────────────────── */
+
+@property --orb-glow-opacity {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.55;
+}
+
+.orb-wrap {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  display: grid;
+  place-items: center;
+  --orb-glow-opacity: 0.55;
+  --orb-breathe-duration: 6.5s;
+  --orb-swirl-duration: 18s;
+  --orb-morph-duration: 16s;
+  transition: --orb-glow-opacity 0.8s ease;
+}
+
+.orb-halo {
+  position: absolute;
+  inset: -32%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    hsl(195 100% 60% / var(--orb-glow-opacity)) 0%,
+    hsl(195 100% 55% / calc(var(--orb-glow-opacity) * 0.35)) 42%,
+    transparent 68%
+  );
+  filter: blur(14px);
+  animation: orb-halo var(--orb-breathe-duration) ease-in-out infinite;
+  transition: opacity 0.8s ease;
+}
+
+.orb {
+  position: relative;
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 26%, hsl(191 92% 70% / 0.9) 0%, transparent 46%),
+    radial-gradient(circle at 72% 60%, hsl(262 83% 64% / 0.6) 0%, transparent 52%),
+    radial-gradient(circle at 42% 76%, hsl(191 95% 66% / 0.65) 0%, transparent 56%),
+    radial-gradient(circle at 50% 42%, hsl(203 90% 40%) 0%, hsl(210 70% 16%) 78%);
+  box-shadow:
+    inset 0 0 22px hsl(195 90% 72% / 0.35),
+    inset -10px -14px 30px hsl(210 80% 10% / 0.5),
+    inset 8px 10px 24px hsl(195 90% 72% / 0.22),
+    0 0 44px hsl(195 100% 55% / 0.4),
+    0 0 90px hsl(195 100% 55% / 0.18);
+  animation:
+    orb-breathe var(--orb-breathe-duration) ease-in-out infinite,
+    orb-morph var(--orb-morph-duration) ease-in-out infinite;
+  will-change: transform, border-radius;
+}
+
+.orb-core {
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    hsl(191 95% 70% / 0.32) 12%,
+    transparent 30%,
+    hsl(262 90% 68% / 0.26) 52%,
+    transparent 72%,
+    hsl(213 95% 72% / 0.28) 88%,
+    transparent 100%
+  );
+  filter: blur(16px);
+  mix-blend-mode: screen;
+  animation: orb-swirl var(--orb-swirl-duration) linear infinite;
+  will-change: transform;
+}
+
+.orb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 85% 46% at 50% 110%,
+    hsl(191 95% 74% / 0.55),
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+  animation: orb-sheen 7s ease-in-out infinite;
+}
+
+.orb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 6px hsl(0 0% 100% / 0.35),
+    inset 0 -2px 10px hsl(195 90% 70% / 0.3);
+  pointer-events: none;
+}
+
+.orb-wrap[data-energy='medium'] {
+  --orb-glow-opacity: 0.7;
+  --orb-breathe-duration: 5s;
+  --orb-swirl-duration: 13s;
+}
+
+.orb-wrap[data-energy='high'] {
+  --orb-glow-opacity: 0.95;
+  --orb-breathe-duration: 3.2s;
+  --orb-swirl-duration: 7.5s;
+  --orb-morph-duration: 9s;
+}
+
+.orb-wrap[data-energy='settling'] {
+  --orb-glow-opacity: 0.6;
+  --orb-breathe-duration: 8s;
+  --orb-swirl-duration: 24s;
+  --orb-morph-duration: 20s;
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+
+@keyframes orb-morph {
+  0%,
+  100% {
+    border-radius: 50%;
+  }
+  33% {
+    border-radius: 48.5% 51.5% 51% 49% / 51% 48.5% 51.5% 49%;
+  }
+  66% {
+    border-radius: 51% 49% 49% 51% / 49% 51% 48.5% 51.5%;
+  }
+}
+
+@keyframes orb-swirl {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orb-halo {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
+}
+
+@keyframes orb-sheen {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateY(4%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .orb-core,
+  .orb-halo,
+  .orb::after {
+    animation: none;
   }
 }

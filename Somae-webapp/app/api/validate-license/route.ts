@@ -1,12 +1,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// The extension (and local dev preview) call this endpoint cross-origin.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
+function json(data: object, status = 200) {
+  return NextResponse.json(data, { status, headers: CORS_HEADERS });
+}
+
 export async function POST(req: Request) {
   try {
     const { license_key, device_hash, device_name, browser_info } = await req.json();
 
     if (!license_key || !device_hash) {
-      return NextResponse.json({ valid: false, message: "Missing required fields" }, { status: 400 });
+      return json({ valid: false, message: "Missing required fields" }, 400);
     }
 
     const license = await prisma.license.findUnique({
@@ -15,11 +30,11 @@ export async function POST(req: Request) {
     });
 
     if (!license) {
-      return NextResponse.json({ valid: false, message: "Invalid license key" });
+      return json({ valid: false, message: "Invalid license key" });
     }
 
     if (!license.isActive) {
-      return NextResponse.json({ valid: false, message: "License is inactive" });
+      return json({ valid: false, message: "License is inactive" });
     }
 
     // Check if device is already activated
@@ -34,7 +49,7 @@ export async function POST(req: Request) {
         data: { lastSeenAt: new Date() },
       });
 
-      return NextResponse.json({
+      return json({
         valid: true,
         remaining_devices: license.maxDevices - license.activatedDevices,
       });
@@ -42,7 +57,7 @@ export async function POST(req: Request) {
 
     // New device activation
     if (license.activatedDevices >= license.maxDevices) {
-      return NextResponse.json({
+      return json({
         valid: false,
         message: "Device limit reached. Please deactivate another device first.",
       });
@@ -68,12 +83,12 @@ export async function POST(req: Request) {
       }),
     ]);
 
-    return NextResponse.json({
+    return json({
       valid: true,
       remaining_devices: license.maxDevices - (license.activatedDevices + 1),
     });
   } catch (error) {
     console.error("Validation error:", error);
-    return NextResponse.json({ valid: false, message: "Internal Server Error" }, { status: 500 });
+    return json({ valid: false, message: "Internal Server Error" }, 500);
   }
 }

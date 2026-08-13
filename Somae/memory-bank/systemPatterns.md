@@ -2,16 +2,30 @@
 
 ## Architecture
 
-The project follows a component-based architecture using React. It is a browser extension, so it has a background script and content scripts that interact with the browser.
+Single React (Vite + TS + Tailwind + shadcn/ui) side-panel app. Views are switched in `App.tsx` via a `View` union: `create | generating | result | settings | activate | crop`.
 
-## Key Technical Decisions
+```
+App (single centered column, NO sidebar)
+├── License gate (useLicense + LicenseView) — unchanged
+├── Header (compact) — æ somae + Beta 01 left; help / settings / close right
+├── CreateView      — heading + BrandChip (compact brand control) + 6 sections + Generate
+├── GeneratingView  — GlowOrb (Siri-inspired, energy tied to stage) + staged checklist
+├── ResultView      — tabs (Results/Variants/History), preview, variants rail,
+│                     actions (Download/Remake/More), refinement, feedback
+├── BrandDialog     — upload/change/remove logo + brand name (persisted)
+├── SettingsView    — API credentials, text model, image engine, license
+└── CropView        — crop images picked from any webpage (content script)
+```
 
-- **UI Framework:** React with TypeScript
-- **Styling:** Tailwind CSS
-- **Build Tool:** Vite
+## Key Patterns
 
-## Component Relationships
+- **Persistence**: `usePersistentState(key, initial)` hook backed by `chrome.storage.local` (falls back to `localStorage` in plain dev). Keys: `somae_brand`, `somae_brief`, `somae_history`, `huenxt_config`.
+- **Creative system** (`src/shared/creativeSystem.ts`): internal art direction per style (Premium Editorial / Bold & Vibrant / Minimal Clean / Luxury Modern), per content type and goal. `buildCreativePrompt / buildVariantPrompt / buildRemakePrompt / buildRefinementPrompt / buildSmartPromptRequest` produce the model-ready prompts. Never exposed to the user.
+- **Generation pipeline** (`App.tsx::runImageGeneration`): Gemini 3 Pro Image (`gemini-3-pro-image-preview`, supports inline logo + reference + base image, imageSize 1K/2K/4K, aspect ratio per content type) or Imagen 4.0 (text-only fallback, selectable in Settings). Vertex AI mode via `VITE_IS_NOT_API_ACCESS=true`.
+- **Logo preservation**: logo is attached as an inline image with an explicit instruction to preserve it accurately (never redesign/reinterpret/modify/replace).
+- **History**: `Generation` records (brief snapshot + `GeneratedAsset[]` with kind original/variant/refinement/remake + feedback), capped at 12.
+- **Web image picking**: content script (`src/content/index.tsx`) → `IMAGE_SELECTED` → `pending_crop` in storage → CropView → cropped image becomes the brief's reference image.
 
-- The main application component is `App.tsx`.
-- The UI is divided into several components, including sections for configuration, inspiration, and strategy.
-- Views like `AuthView`, `CropView`, `PaywallView`, and `SettingsView` handle different application states.
+## Design Tokens
+
+Defined in `src/index.css` + `tailwind.config.js`: sidebar deep navy (`--sidebar*`), main canvas soft off-white, primary Somae blue (`--somae-blue`), warm orange accent (`--somae-orange`, used sparingly), subtle cool-gray borders, soft diffused shadows (`shadow-card`), selected state = blue border + blue tint + checkmark (`OptionCard`).

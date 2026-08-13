@@ -1,813 +1,602 @@
-import { useState, useEffect } from 'react';
-import { Settings, Wand2, Loader2 } from 'lucide-react';
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GoogleGenAI } from "@google/genai";
+import { useEffect, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { GoogleGenAI, PersonGeneration } from '@google/genai';
 import { type PixelCrop } from 'react-image-crop';
 
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-
 // Shared
-import type { ImageAsset, StrategyContext, AppConfig, PendingCrop, InspirationCategory, TraceStep, ImagenConfig } from "@/shared/types";
+import type {
+    AppConfig,
+    BrandProfile,
+    CreativeBrief,
+    FeedbackRating,
+    GeneratedAsset,
+    Generation,
+    PendingCrop,
+} from '@/shared/types';
+import {
+    DEFAULT_BRAND,
+    DEFAULT_BRIEF,
+    buildCreativePrompt,
+    buildRemakePrompt,
+    buildRefinementPrompt,
+    buildSmartPromptRequest,
+    buildVariantPrompt,
+    getContentType,
+    getQuality,
+} from '@/shared/creativeSystem';
 
-// Modular Components
-import { SettingsView } from "@/components/views/SettingsView";
-import { CropView } from "@/components/views/CropView";
-import { GeneratedImageView } from "@/components/GeneratedImageView";
-import { GenerationTraceView } from "@/components/GenerationTraceView";
-import { StrategySection } from "@/components/sections/StrategySection";
-import { InspirationSection } from "@/components/sections/InspirationSection";
-import { ImagenConfigSection } from "@/components/sections/ImagenConfigSection";
-import { LicenseView } from "@/components/views/LicenseView";
+// Views & components
+import { SettingsView } from '@/components/views/SettingsView';
+import { CropView } from '@/components/views/CropView';
+import { LicenseView } from '@/components/views/LicenseView';
+import { Header } from '@/components/somae/Header';
+import { BrandDialog } from '@/components/somae/BrandDialog';
+import { CreateView } from '@/components/somae/CreateView';
+import { GeneratingView } from '@/components/somae/GeneratingView';
+import { ResultView } from '@/components/somae/ResultView';
 
 // Hooks
-import { useLicense } from "@/hooks/useLicense";
+import { useLicense } from '@/hooks/useLicense';
+import { usePersistentState } from '@/hooks/usePersistentState';
 
-// Utils
-import {
-  getCategoryAnalysisPrompt,
-  synthesizeImagenPrompt,
-  getAspectRatioForPlatform,
-  groupImagesByCategory
-} from "@/utils/imagenPromptBuilder";
+type View = 'create' | 'generating' | 'result' | 'settings' | 'activate' | 'crop';
+
+const MAX_HISTORY = 12;
+
+// Check for Vertex AI mode
+const isVertexAI = import.meta.env.VITE_IS_NOT_API_ACCESS === 'true';
+
+// Dev-only preview bypass for the license gate (inert in production builds)
+const isDevPreview =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).has('preview');
+
+/** Convert a data URL into a Gemini inlineData part */
+function dataUrlToInlineData(dataUrl: string) {
+    const [header, data] = dataUrl.split(',');
+    const mimeMatch = header.match(/data:(.*?)(;|$)/);
+    return {
+        inlineData: {
+            mimeType: mimeMatch?.[1] || 'image/png',
+            data,
+        },
+    };
+}
 
 export default function App() {
-  // License
-  const licenseInfo = useLicense();
-  const [licensedOnce, setLicensedOnce] = useState(false);
+    // ── License ──────────────────────────────────────────────
+    const licenseInfo = useLicense();
+    const [licensedOnce, setLicensedOnce] = useState(false);
 
-  // Once license confirmed, remember it for the session
-  useEffect(() => {
-    if (licenseInfo.valid) setLicensedOnce(true);
-  }, [licenseInfo.valid]);
+    useEffect(() => {
+        if (licenseInfo.valid) setLicensedOnce(true);
+    }, [licenseInfo.valid]);
 
-  const [view, setView] = useState<'home' | 'settings' | 'crop' | 'generating' | 'generated' | 'activate'>('home');
-  const [images, setImages] = useState<ImageAsset[]>([]);
-  const [strategy, setStrategy] = useState<StrategyContext>({
-    goal: 'Drive Engagement',
-    platform: 'Instagram Feed',
-    audience: 'General',
-    additionalReq: ''
-  });
+    // ── View & UI state ──────────────────────────────────────
+    const [view, setView] = useState<View>('create');
+    const [brandDialogOpen, setBrandDialogOpen] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
-  const [designRecipe, setDesignRecipe] = useState<string>('');
-  const [traceSteps, setTraceSteps] = useState<TraceStep[]>([]);
-  // Check for Vertex AI mode
-  const isVertexAI = import.meta.env.VITE_IS_NOT_API_ACCESS === 'true';
-
-  const [config, setConfig] = useState<AppConfig>({
-    apiKey: '',
-    model: 'gemini-2.5-flash',
-    endpoint: '',
-    projectId: '',
-    location: 'us-central1',
-    googleCloudToken: ''
-  });
-
-  const [imagenConfig, setImagenConfig] = useState<ImagenConfig>({
-    model: 'gemini-3-pro-image',
-    numberOfImages: 1,
-    imageSize: '1K',
-    aspectRatio: 'auto',
-    personGeneration: 'allow_adult',
-    temperature: 1.0,
-    topP: 0.95
-  });
-
-  // Auto-update aspect ratio when platform changes
-  useEffect(() => {
-    if (imagenConfig.aspectRatio === 'auto') {
-      // Keep it as auto, the actual ratio will be determined during generation
-      return;
-    }
-    // If user manually changed it, don't override
-  }, [strategy.platform, imagenConfig.aspectRatio]);
-
-  // Selection Logic
-  const [activeCategory, setActiveCategory] = useState<InspirationCategory | null>(null);
-
-  // Cropping State
-  const [pendingCropImage, setPendingCropImage] = useState<string | null>(null);
-
-  useEffect(() => {
-    chrome.storage?.local.get(['images', 'huenxt_config', 'somae_config', 'pending_crop', 'strategy', 'active_category'], (result) => {
-      if (result.images) setImages(result.images as ImageAsset[]);
-      const storedConfig = result.huenxt_config || result.somae_config;
-      if (storedConfig) {
-        setConfig(storedConfig as AppConfig);
-        if (!result.huenxt_config) {
-          chrome.storage?.local.set({ huenxt_config: storedConfig });
-        }
-      }
-      if (result.strategy) setStrategy(result.strategy as StrategyContext);
-      if (result.active_category) setActiveCategory(result.active_category as InspirationCategory);
-
-      if (result.pending_crop) {
-        setPendingCropImage((result.pending_crop as PendingCrop).dataUrl);
-        setView('crop');
-      }
+    // ── Persistent state ─────────────────────────────────────
+    const [brand, setBrand] = usePersistentState<BrandProfile>('somae_brand', DEFAULT_BRAND);
+    const [brief, setBrief] = usePersistentState<CreativeBrief>('somae_brief', DEFAULT_BRIEF);
+    const [history, setHistory] = usePersistentState<Generation[]>('somae_history', []);
+    const [config, setConfig] = usePersistentState<AppConfig>('huenxt_config', {
+        apiKey: '',
+        model: 'gemini-2.5-flash',
+        endpoint: '',
+        projectId: '',
+        location: 'us-central1',
+        googleCloudToken: '',
+        imageEngine: 'gemini',
     });
 
-    const changeListener = (changes: any, areaName: string) => {
-      if (areaName === 'local') {
-        if (changes.images) setImages(changes.images.newValue as ImageAsset[]);
-        if (changes.pending_crop?.newValue) {
-          setPendingCropImage((changes.pending_crop.newValue as PendingCrop).dataUrl);
-          setView('crop');
-        }
-      }
-    };
-    chrome.storage?.onChanged.addListener(changeListener);
-    return () => chrome.storage?.onChanged.removeListener(changeListener);
-  }, []);
+    // ── Generation state ─────────────────────────────────────
+    const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
+    const [activeAssetId, setActiveAssetId] = useState<string>('');
+    const [apiDone, setApiDone] = useState(false);
+    const [generationError, setGenerationError] = useState<string | null>(null);
+    const [working, setWorking] = useState(false);
+    const [workingLabel, setWorkingLabel] = useState('Generating your visual');
+    const cancelledRef = useRef(false);
+    const busyRef = useRef(false);
 
-  const saveConfig = () => {
-    chrome.storage?.local.set({ huenxt_config: config });
-    setView('home');
-  };
+    // ── Crop flow (pick image from any webpage) ──────────────
+    const [pendingCropImage, setPendingCropImage] = useState<string | null>(null);
 
-  const updateStrategy = (key: keyof StrategyContext, value: string) => {
-    const newStrategy = { ...strategy, [key]: value };
-    setStrategy(newStrategy);
-    chrome.storage?.local.set({ strategy: newStrategy });
-  };
+    useEffect(() => {
+        if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
 
-  const startSelection = async (category: InspirationCategory) => {
-    console.log('[App] startSelection called for:', category);
-    setActiveCategory(category);
-
-    // Ensure storage is set before closing
-    await chrome.storage?.local.set({ active_category: category });
-
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab.id) {
-      console.log('[App] Sending TOGGLE_SELECTION to tab:', tab.id);
-      try {
-        await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SELECTION', active: true });
-      } catch (e) {
-        console.error('[App] Error sending message:', e);
-      }
-
-      console.log('[App] Closing window');
-
-    } else {
-      console.error('[App] No active tab found');
-    }
-  };
-
-  const onConfirmCrop = (completedCrop: PixelCrop, image: HTMLImageElement) => {
-    const canvas = document.createElement('canvas');
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-
-    canvas.width = completedCrop.width;
-    canvas.height = completedCrop.height;
-
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(
-        image,
-        completedCrop.x * scaleX,
-        completedCrop.y * scaleY,
-        completedCrop.width * scaleX,
-        completedCrop.height * scaleY,
-        0,
-        0,
-        completedCrop.width,
-        completedCrop.height
-      );
-      const base64 = canvas.toDataURL('image/jpeg');
-
-      // Add with current category
-      const category = activeCategory || 'elements';
-      const newImages = [...images, { id: crypto.randomUUID(), dataUrl: base64, category }];
-
-      setImages(newImages);
-      chrome.storage.local.set({ images: newImages });
-
-      // Reset
-      chrome.storage.local.remove(['pending_crop', 'active_category']);
-      setPendingCropImage(null);
-      setActiveCategory(null);
-      setView('home');
-    }
-  };
-
-  const cancelCrop = () => {
-    chrome.storage.local.remove(['pending_crop', 'active_category']);
-    setPendingCropImage(null);
-    setActiveCategory(null);
-    setView('home');
-  };
-
-  const deleteImage = (id: string) => {
-    const newImages = images.filter(i => i.id !== id);
-    setImages(newImages);
-    chrome.storage.local.set({ images: newImages });
-  };
-
-  const clearAllImages = () => {
-    setImages([]);
-    chrome.storage.local.set({ images: [] });
-  };
-
-  const updateTraceStep = (id: string, updates: Partial<TraceStep>) => {
-    setTraceSteps(prev => prev.map(step =>
-      step.id === id ? { ...step, ...updates } : step
-    ));
-  };
-
-  const handleImageUpload = (file: File, category: InspirationCategory) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string;
-      if (base64) {
-        // Use functional update to avoid stale closure
-        setImages(prev => {
-          const newImages = [...prev, { id: crypto.randomUUID(), dataUrl: base64, category }];
-          chrome.storage.local.set({ images: newImages });
-          return newImages;
-        });
-      }
-    };
-    reader.onerror = (err) => {
-      console.error('[App] FileReader error:', err);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const generateArtifact = async () => {
-    if (isVertexAI) {
-      if (!config.projectId || !config.googleCloudToken) {
-        alert('Please set Project ID and Google Cloud Token in Settings');
-        setView('settings');
-        return;
-      }
-    } else {
-      if (!config.apiKey) {
-        alert('Please set your API Key in Settings');
-        setView('settings');
-        return;
-      }
-    }
-
-    if (images.length === 0) {
-      alert('Please add at least one inspiration image before generating.');
-      return;
-    }
-
-    // Initialize trace steps
-    const groupedImages = groupImagesByCategory(images);
-    const steps: TraceStep[] = [];
-    let stepId = 1;
-
-    // Add analysis steps for categories with images
-    (['layout', 'color', 'typography', 'elements'] as InspirationCategory[]).forEach(category => {
-      if (groupedImages[category].length > 0) {
-        steps.push({
-          id: String(stepId++),
-          category,
-          status: 'pending',
-          title: `Analyzing ${category.charAt(0).toUpperCase() + category.slice(1)}`,
-          images: groupedImages[category],
-          timestamp: Date.now()
-        });
-      }
-    });
-
-    // Add synthesis and generation steps
-    steps.push({
-      id: String(stepId++),
-      status: 'pending',
-      title: 'Synthesizing Prompt',
-      timestamp: Date.now()
-    });
-
-    steps.push({
-      id: String(stepId++),
-      status: 'pending',
-      title: `Generating with ${imagenConfig.model === 'imagen-4.0' ? 'Imagen 4.0' : 'Gemini 3 Pro Image'}`,
-      timestamp: Date.now()
-    });
-
-    setTraceSteps(steps);
-    setGeneratedImages([]);
-    setView('generating');
-    setLoading(true);
-
-    try {
-      // Initialize Client based on mode
-      let client;
-      if (isVertexAI) {
-        client = new GoogleGenAI({
-          vertexai: true,
-          project: config.projectId!,
-          location: config.location || 'us-central1',
-          httpOptions: {
-            headers: {
-              'Authorization': `Bearer ${config.googleCloudToken}`
+        chrome.storage.local.get(['pending_crop'], (result) => {
+            if (result.pending_crop) {
+                setPendingCropImage((result.pending_crop as PendingCrop).dataUrl);
+                setView('crop');
             }
-          }
         });
-      } else {
-        // Fallback for analysis using old SDK if needed, BUT for consistency keeping it simple.
-        // However, the original code used GoogleGenerativeAI for analysis.
-        // Let's try to use GoogleGenAI for everything if possible, or keep separate paths.
-        // The new SDK (@google/genai) handles both if initialized correctly.
-        // BUT, to minimize risk of breaking the existing flow, I will just branch the initialization.
-      }
 
+        const changeListener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+            if (areaName === 'local' && changes.pending_crop?.newValue) {
+                setPendingCropImage((changes.pending_crop.newValue as PendingCrop).dataUrl);
+                setView('crop');
+            }
+        };
+        chrome.storage.onChanged.addListener(changeListener);
+        return () => chrome.storage.onChanged.removeListener(changeListener);
+    }, []);
 
-      const categoryInsights: Record<InspirationCategory, string> = {
-        layout: '',
-        color: '',
-        typography: '',
-        elements: ''
-      };
+    // ── Derived state ────────────────────────────────────────
+    const currentGeneration = history.find((g) => g.id === currentGenerationId) ?? null;
 
-      // Step 1-4: Analyze each category
-      let currentStepIndex = 0;
-      for (const category of ['layout', 'color', 'typography', 'elements'] as InspirationCategory[]) {
-        const categoryImages = groupedImages[category];
-        if (categoryImages.length > 0) {
-          const stepId = steps[currentStepIndex].id;
-          const startTime = Date.now();
+    // ── Config helpers ───────────────────────────────────────
+    const hasCredentials = isVertexAI
+        ? Boolean(config.projectId && config.googleCloudToken)
+        : Boolean(config.apiKey);
 
-          const analysisPrompt = getCategoryAnalysisPrompt(category);
-          updateTraceStep(stepId, {
-            status: 'in-progress',
-            prompt: analysisPrompt
-          });
-
-          let responseText = '';
-
-          if (isVertexAI && client) {
-            // Use Vertex AI Client
-            const imageParts = categoryImages.map(img => ({
-              inlineData: {
-                data: img.dataUrl.split(',')[1],
-                mimeType: "image/jpeg"
-              }
-            }));
-
-            const result = await client.models.generateContent({
-              model: config.model, // e.g. gemini-2.5-flash
-              contents: [
-                { text: analysisPrompt },
-                ...imageParts
-              ]
+    const buildClient = () => {
+        if (isVertexAI) {
+            return new GoogleGenAI({
+                vertexai: true,
+                project: config.projectId!,
+                location: config.location || 'us-central1',
+                httpOptions: {
+                    headers: { Authorization: `Bearer ${config.googleCloudToken}` },
+                },
             });
-            responseText = result.text || '';
-          } else {
-            // Existing Logic with GoogleGenerativeAI
-            const genAI = new GoogleGenerativeAI(config.apiKey);
-            const model = genAI.getGenerativeModel({ model: config.model });
-
-            const imageParts = categoryImages.map(img => ({
-              inlineData: {
-                data: img.dataUrl.split(',')[1],
-                mimeType: "image/jpeg"
-              }
-            }));
-
-            const result = await model.generateContent([analysisPrompt, ...imageParts]);
-            const response = await result.response;
-            responseText = response.text();
-          }
-
-          categoryInsights[category] = responseText;
-
-          updateTraceStep(stepId, {
-            status: 'complete',
-            response: categoryInsights[category],
-            duration: (Date.now() - startTime) / 1000
-          });
-
-          currentStepIndex++;
         }
-      }
+        return new GoogleGenAI({ apiKey: config.apiKey });
+    };
 
-      // Step: Synthesize prompt
-      const synthesisStepId = steps[currentStepIndex].id;
-      updateTraceStep(synthesisStepId, { status: 'in-progress' });
+    /**
+     * Core generation request. Sends the optimized prompt plus the
+     * brand logo / reference / base image into the image model.
+     */
+    const runImageGeneration = async (
+        prompt: string,
+        images: string[],
+        briefSnapshot: CreativeBrief
+    ): Promise<string> => {
+        const quality = getQuality(briefSnapshot.quality);
+        const aspectRatio = getContentType(briefSnapshot.contentType).aspectRatio;
+        const engine = config.imageEngine ?? 'gemini';
 
-      const imagenPrompt = synthesizeImagenPrompt(categoryInsights, strategy);
-
-      const recipeText = `# Design Analysis\n\n${Object.entries(categoryInsights)
-        .filter(([_, insight]) => insight)
-        .map(([category, insight]) => `## ${category.charAt(0).toUpperCase() + category.slice(1)}\n${insight}`)
-        .join('\n\n')}\n\n# Generated Prompt\n${imagenPrompt}`;
-      setDesignRecipe(recipeText);
-
-      updateTraceStep(synthesisStepId, {
-        status: 'complete',
-        response: imagenPrompt,
-        duration: 0.1
-      });
-
-      currentStepIndex++;
-
-      // Step: Generate images
-      const generationStepId = steps[currentStepIndex].id;
-      const genStartTime = Date.now();
-      updateTraceStep(generationStepId, {
-        status: 'in-progress',
-        prompt: imagenPrompt
-      });
-
-      const aspectRatio = imagenConfig.aspectRatio === 'auto'
-        ? getAspectRatioForPlatform(strategy.platform)
-        : imagenConfig.aspectRatio;
-
-      let generatedImageUrls: string[] = [];
-
-      if (imagenConfig.model === 'imagen-4.0') {
-        const clientOptions = isVertexAI ? {
-          vertexai: true,
-          project: config.projectId!,
-          location: config.location || 'us-central1',
-          httpOptions: {
-            headers: {
-              'Authorization': `Bearer ${config.googleCloudToken}`
-            }
-          }
-        } : { apiKey: config.apiKey };
-
-        const imagenAI = new GoogleGenAI(clientOptions);
-        const imagenResponse = await imagenAI.models.generateImages({
-          model: 'imagen-4.0-generate-001',
-          prompt: imagenPrompt,
-          config: {
-            numberOfImages: imagenConfig.numberOfImages,
-            imageSize: imagenConfig.imageSize,
-            aspectRatio: aspectRatio as any,
-            personGeneration: imagenConfig.personGeneration as any,
-          },
-        });
-
-        if (!imagenResponse.generatedImages || imagenResponse.generatedImages.length === 0) {
-          throw new Error('No images were generated by Imagen');
+        if (engine === 'imagen') {
+            // Imagen 4.0 — text-only engine (reference/logo images are not supported)
+            const client = buildClient();
+            const response = await client.models.generateImages({
+                model: 'imagen-4.0-generate-001',
+                prompt,
+                config: {
+                    numberOfImages: 1,
+                    imageSize: quality.imageSize === '4K' ? '2K' : quality.imageSize,
+                    aspectRatio: aspectRatio as '1:1' | '3:4' | '4:3' | '9:16' | '16:9',
+                    personGeneration: PersonGeneration.ALLOW_ADULT,
+                },
+            });
+            const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+            if (!imageBytes) throw new Error('No image was generated. Please try again.');
+            return `data:image/png;base64,${imageBytes}`;
         }
 
-        generatedImageUrls = imagenResponse.generatedImages.map(img => {
-          if (!img?.image?.imageBytes) {
-            throw new Error('Invalid image data received');
-          }
-          return `data:image/png;base64,${img.image.imageBytes}`;
-        });
-      } else {
-        // Use Gemini 3 Pro Image (via GoogleGenAI SDK)
-        // Gemini 3 Pro Image uses generateContent with responseModalities for images
+        // Gemini 3 Pro Image — supports reference + logo images
+        const client = buildClient();
+        const imageParts = images.map(dataUrlToInlineData);
 
-        // Add reference images (limit 14)
-        const referenceImages = images.slice(0, 14).map(img => {
-          try {
-            const base64Data = img.dataUrl.split(',')[1];
-            if (!base64Data) return null;
-            return {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: base64Data
-              }
-            };
-          } catch (e) {
-            console.warn('Invalid image data skipped:', img.id);
-            return null;
-          }
-        }).filter(item => item !== null) as any[];
-
-        const clientOptions = isVertexAI ? {
-          vertexai: true,
-          project: config.projectId!,
-          location: config.location || 'us-central1',
-          httpOptions: {
-            headers: {
-              'Authorization': `Bearer ${config.googleCloudToken}`
-            }
-          }
-        } : { apiKey: config.apiKey };
-
-        const geminiAI = new GoogleGenAI(clientOptions);
-        const geminiResponse = await geminiAI.models.generateContent({
-          model: 'gemini-3-pro-image-preview',
-          contents: [
-            { text: imagenPrompt },
-            ...referenceImages
-          ],
-          // @ts-ignore - The SDK types might not fully support imageConfig in generateContent yet
-          config: {
-            responseModalities: ['IMAGE'],
-            imageConfig: {
-              aspectRatio: aspectRatio as any,
-              ...(imagenConfig.imageSize ? { imageSize: imagenConfig.imageSize } : {})
+        const response = await client.models.generateContent({
+            model: 'gemini-3-pro-image-preview',
+            contents: [{ text: prompt }, ...imageParts],
+            // @ts-ignore — imageConfig is not yet fully typed in the SDK
+            config: {
+                responseModalities: ['IMAGE'],
+                imageConfig: {
+                    aspectRatio,
+                    imageSize: quality.imageSize,
+                },
+                candidateCount: 1,
             },
-            // Flat configuration for candidateCount and temperature/topP
-            candidateCount: imagenConfig.numberOfImages,
-            ...(imagenConfig.temperature || imagenConfig.topP ? {
-              temperature: imagenConfig.temperature,
-              topP: imagenConfig.topP
-            } : {})
-          },
         });
 
-        if (!geminiResponse.candidates?.[0]?.content?.parts || geminiResponse.candidates[0].content.parts.length === 0) {
-          throw new Error('No images were generated by Gemini 3 Pro');
+        const parts = response.candidates?.[0]?.content?.parts ?? [];
+        const imagePart = parts.find((p) => p.inlineData?.data);
+        if (!imagePart?.inlineData?.data) {
+            throw new Error('No image was generated. Please try again.');
+        }
+        return `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`;
+    };
+
+    /** Images attached to a fresh generation: logo first, then reference */
+    const briefImages = (briefSnapshot: CreativeBrief): string[] => {
+        const imgs: string[] = [];
+        if (brand.logoDataUrl) imgs.push(brand.logoDataUrl);
+        if (briefSnapshot.referenceDataUrl) imgs.push(briefSnapshot.referenceDataUrl);
+        return imgs;
+    };
+
+    const appendAsset = (generationId: string, asset: GeneratedAsset) => {
+        setHistory((prev) =>
+            prev.map((g) =>
+                g.id === generationId ? { ...g, assets: [...g.assets, asset] } : g
+            )
+        );
+        setActiveAssetId(asset.id);
+    };
+
+    // ── Actions ──────────────────────────────────────────────
+
+    const updateBrief = (patch: Partial<CreativeBrief>) => {
+        setBrief((prev) => ({ ...prev, ...patch }));
+    };
+
+    const handleGenerate = async () => {
+        if (busyRef.current) return; // disable duplicate submissions
+
+        if (!hasCredentials) {
+            alert(
+                isVertexAI
+                    ? 'Please set your Project ID and Google Cloud Token in Settings first.'
+                    : 'Please set your API Key in Settings first.'
+            );
+            setView('settings');
+            return;
         }
 
-        generatedImageUrls = geminiResponse.candidates[0].content.parts
-          .filter(part => part.inlineData && part.inlineData.data)
-          .map(part => {
-            return `data:${part.inlineData?.mimeType || 'image/png'};base64,${part.inlineData?.data}`;
-          });
+        busyRef.current = true;
+        cancelledRef.current = false;
+        setGenerationError(null);
+        setApiDone(false);
+        setView('generating');
 
-        if (generatedImageUrls.length === 0) {
-          throw new Error('No valid image data found in response');
+        const briefSnapshot = { ...brief };
+
+        try {
+            const prompt = buildCreativePrompt(briefSnapshot, brand);
+            const dataUrl = await runImageGeneration(prompt, briefImages(briefSnapshot), briefSnapshot);
+
+            if (cancelledRef.current) return;
+
+            const generation: Generation = {
+                id: crypto.randomUUID(),
+                createdAt: Date.now(),
+                brief: briefSnapshot,
+                assets: [
+                    {
+                        id: crypto.randomUUID(),
+                        dataUrl,
+                        kind: 'original',
+                        createdAt: Date.now(),
+                    },
+                ],
+            };
+
+            setHistory((prev) => [generation, ...prev].slice(0, MAX_HISTORY));
+            setCurrentGenerationId(generation.id);
+            setActiveAssetId(generation.assets[0].id);
+            setApiDone(true);
+        } catch (e) {
+            console.error('[Somae] Generation failed:', e);
+            if (!cancelledRef.current) {
+                setGenerationError((e as Error).message || 'Generation failed. Please try again.');
+            }
+        } finally {
+            busyRef.current = false;
         }
-      }
+    };
 
-      setGeneratedImages(generatedImageUrls);
-
-      updateTraceStep(generationStepId, {
-        status: 'complete',
-        response: `Successfully generated ${generatedImageUrls.length} image(s)`,
-        duration: (Date.now() - genStartTime) / 1000
-      });
-
-    } catch (e) {
-      console.error('Error generating:', e);
-      const errorMessage = (e as Error).message;
-
-      // Update the current step with error
-      const currentStep = traceSteps.find(s => s.status === 'in-progress');
-      if (currentStep) {
-        updateTraceStep(currentStep.id, {
-          status: 'error',
-          error: errorMessage
-        });
-      }
-
-      alert('Error generating: ' + errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── License Gates ──────────────────────────────────────
-  if (!licensedOnce) {
-    if (licenseInfo.loading) {
-      return (
-        <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        </div>
-      );
-    }
-
-    if (!licenseInfo.valid) {
-      return <LicenseView onSuccess={() => setLicensedOnce(true)} />;
-    }
-  }
-  // ─────────────────────────────────────────────────────────────
-
-  if (view === 'settings') {
-    return <SettingsView
-      config={config}
-      onConfigChange={setConfig}
-      onSave={saveConfig}
-      onBack={() => setView('home')}
-      licenseInfo={licenseInfo}
-      onActivateRequest={() => setView('activate')}
-    />;
-  }
-
-  if (view === 'activate') {
-    return <LicenseView onSuccess={() => {
-      setLicensedOnce(true);
-      setView('home');
-    }} />;
-  }
-
-  if (view === 'crop' && pendingCropImage) {
-    return <CropView
-      imageSrc={pendingCropImage}
-      category={activeCategory}
-      onConfirm={onConfirmCrop}
-      onCancel={cancelCrop}
-    />;
-  }
-
-
-
-  const refineArtifact = async (prompt: string, refineImages: ImageAsset[], baseImage?: string) => {
-    if (isVertexAI) {
-      if (!config.projectId || !config.googleCloudToken) {
-        alert('Please set Project ID and Google Cloud Token in Settings');
-        return;
-      }
-    } else {
-      if (!config.apiKey) {
-        alert('Please set your API Key in Settings');
-        return;
-      }
-    }
-
-    setLoading(true);
-    const stepId = `refine-${Date.now()}`;
-
-    // Add refinement step to trace
-    setTraceSteps(prev => [...prev, {
-      id: stepId,
-      status: 'in-progress',
-      title: 'Generating Variation',
-      prompt: prompt,
-      timestamp: Date.now()
-    }]);
-
-    try {
-      // Prepare images: Base image + new inspiration
-      const imageParts: any[] = [];
-
-      if (baseImage) {
-        imageParts.push({
-          inlineData: {
-            mimeType: "image/png",
-            data: baseImage.split(',')[1]
-          }
-        });
-      }
-
-      refineImages.forEach(img => {
-        imageParts.push({
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: img.dataUrl.split(',')[1]
-          }
-        });
-      });
-
-      // Construct prompt with context
-      const fullPrompt = baseImage
-        ? `Refine this design based on these instructions: ${prompt}`
-        : `${designRecipe}\n\nAdditional Instructions: ${prompt}`;
-
-      const clientOptions = isVertexAI ? {
-        vertexai: true,
-        project: config.projectId!,
-        location: config.location || 'us-central1',
-        httpOptions: {
-          headers: {
-            'Authorization': `Bearer ${config.googleCloudToken}`
-          }
+    /** Remake / Regenerate — same brief, fresh execution */
+    const handleRemake = async () => {
+        if (!currentGeneration || working || !hasCredentials) return;
+        setWorking(true);
+        setWorkingLabel('Remaking your design');
+        try {
+            const prompt = buildRemakePrompt(currentGeneration.brief, brand);
+            const dataUrl = await runImageGeneration(
+                prompt,
+                briefImages(currentGeneration.brief),
+                currentGeneration.brief
+            );
+            appendAsset(currentGeneration.id, {
+                id: crypto.randomUUID(),
+                dataUrl,
+                kind: 'remake',
+                createdAt: Date.now(),
+            });
+        } catch (e) {
+            console.error('[Somae] Remake failed:', e);
+            alert('Remake failed: ' + (e as Error).message);
+        } finally {
+            setWorking(false);
         }
-      } : { apiKey: config.apiKey };
+    };
 
-      const geminiAI = new GoogleGenAI(clientOptions);
-      const startTime = Date.now();
+    /** New Variants — additional variations from the same brief */
+    const handleNewVariant = async () => {
+        if (!currentGeneration || working || !hasCredentials) return;
+        setWorking(true);
+        setWorkingLabel('Creating a new variant');
+        try {
+            const prompt = buildVariantPrompt(
+                currentGeneration.brief,
+                brand,
+                currentGeneration.assets.length
+            );
+            const dataUrl = await runImageGeneration(
+                prompt,
+                briefImages(currentGeneration.brief),
+                currentGeneration.brief
+            );
+            appendAsset(currentGeneration.id, {
+                id: crypto.randomUUID(),
+                dataUrl,
+                kind: 'variant',
+                createdAt: Date.now(),
+            });
+        } catch (e) {
+            console.error('[Somae] Variant failed:', e);
+            alert('Variant generation failed: ' + (e as Error).message);
+        } finally {
+            setWorking(false);
+        }
+    };
 
-      const geminiResponse = await geminiAI.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
-        contents: [
-          { text: fullPrompt },
-          ...imageParts
-        ],
-        // @ts-ignore
-        config: {
-          responseModalities: ['IMAGE'],
-          imageConfig: {
-            aspectRatio: imagenConfig.aspectRatio === 'auto' ? undefined : imagenConfig.aspectRatio as any,
-          },
-          candidateCount: 1,
-        },
-      });
+    /** Refine — conversational iteration on the current design */
+    const handleRefine = async (instruction: string) => {
+        if (!currentGeneration || working || !hasCredentials) return;
+        const activeAsset =
+            currentGeneration.assets.find((a) => a.id === activeAssetId) ??
+            currentGeneration.assets[0];
+        if (!activeAsset) return;
 
-      if (!geminiResponse.candidates?.[0]?.content?.parts?.length) {
-        throw new Error('No images generated');
-      }
+        setWorking(true);
+        setWorkingLabel('Refining your design');
+        try {
+            const prompt = buildRefinementPrompt(instruction, currentGeneration.brief, brand);
+            // Current image first (context), then the logo so it stays accurate
+            const images = [activeAsset.dataUrl];
+            if (brand.logoDataUrl) images.push(brand.logoDataUrl);
 
-      const newImageUrls = geminiResponse.candidates[0].content.parts
-        .filter(part => part.inlineData && part.inlineData.data)
-        .map(part => `data:${part.inlineData?.mimeType || 'image/png'};base64,${part.inlineData?.data}`);
+            const dataUrl = await runImageGeneration(prompt, images, currentGeneration.brief);
+            appendAsset(currentGeneration.id, {
+                id: crypto.randomUUID(),
+                dataUrl,
+                kind: 'refinement',
+                refinementNote: instruction,
+                createdAt: Date.now(),
+            });
+        } catch (e) {
+            console.error('[Somae] Refinement failed:', e);
+            alert('Refinement failed: ' + (e as Error).message);
+        } finally {
+            setWorking(false);
+        }
+    };
 
-      if (newImageUrls.length > 0) {
-        setGeneratedImages(prev => [...prev, ...newImageUrls]);
-
-        updateTraceStep(stepId, {
-          status: 'complete',
-          response: 'Variation generated successfully',
-          duration: (Date.now() - startTime) / 1000
+    /** Smart Prompt — restructure the user's notes into a clear brief */
+    const handleSmartPrompt = async (text: string): Promise<string> => {
+        if (!hasCredentials) {
+            throw new Error(
+                isVertexAI
+                    ? 'Set your Project ID and Google Cloud Token in Settings to use Smart Prompt.'
+                    : 'Set your API Key in Settings to use Smart Prompt.'
+            );
+        }
+        const seed =
+            text.trim() ||
+            `A ${getContentType(brief.contentType).label} post for ${brand.name || 'our brand'} with the goal: ${brief.goal}.`;
+        const client = buildClient();
+        const result = await client.models.generateContent({
+            model: config.model || 'gemini-2.5-flash',
+            contents: [{ text: buildSmartPromptRequest(seed, brief) }],
         });
-      }
+        const improved = result.text?.trim();
+        if (!improved) throw new Error('Smart Prompt returned nothing. Try again.');
+        return improved;
+    };
 
-    } catch (e) {
-      console.error('Refinement error:', e);
-      updateTraceStep(stepId, {
-        status: 'error',
-        error: (e as Error).message
-      });
-      alert('Error refining: ' + (e as Error).message);
-    } finally {
-      setLoading(false);
+    const handleDownload = (asset: GeneratedAsset) => {
+        const link = document.createElement('a');
+        link.href = asset.dataUrl;
+        const brandSlug = (brand.name || 'somae').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        link.download = `${brandSlug}-design-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleFeedback = (assetId: string, rating: FeedbackRating) => {
+        if (!currentGenerationId) return;
+        setHistory((prev) =>
+            prev.map((g) =>
+                g.id === currentGenerationId
+                    ? {
+                            ...g,
+                            assets: g.assets.map((a) =>
+                                a.id === assetId ? { ...a, feedback: rating } : a
+                            ),
+                        }
+                    : g
+            )
+        );
+    };
+
+    const handleDuplicateBrief = () => {
+        if (!currentGeneration) return;
+        setBrief({ ...currentGeneration.brief });
+        setView('create');
+    };
+
+    const handleDeleteGeneration = () => {
+        if (!currentGenerationId) return;
+        setHistory((prev) => prev.filter((g) => g.id !== currentGenerationId));
+        setCurrentGenerationId(null);
+        setActiveAssetId('');
+        setView('create');
+    };
+
+    const handleOpenGeneration = (generationId: string) => {
+        const generation = history.find((g) => g.id === generationId);
+        if (!generation) return;
+        setCurrentGenerationId(generationId);
+        setActiveAssetId(generation.assets[generation.assets.length - 1]?.id ?? '');
+    };
+
+    // ── Crop flow handlers ───────────────────────────────────
+
+    const startPickFromPage = async () => {
+        if (typeof chrome === 'undefined' || !chrome.tabs?.query) return;
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab.id) {
+            try {
+                await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SELECTION', active: true });
+            } catch (e) {
+                console.error('[Somae] Could not start page selection:', e);
+            }
+        }
+    };
+
+    const onConfirmCrop = (completedCrop: PixelCrop, image: HTMLImageElement) => {
+        const canvas = document.createElement('canvas');
+        const scaleX = image.naturalWidth / image.width;
+        const scaleY = image.naturalHeight / image.height;
+
+        canvas.width = completedCrop.width;
+        canvas.height = completedCrop.height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.drawImage(
+            image,
+            completedCrop.x * scaleX,
+            completedCrop.y * scaleY,
+            completedCrop.width * scaleX,
+            completedCrop.height * scaleY,
+            0,
+            0,
+            completedCrop.width,
+            completedCrop.height
+        );
+        const base64 = canvas.toDataURL('image/png');
+
+        // Picked images become the creative reference
+        updateBrief({ referenceDataUrl: base64 });
+
+        chrome.storage?.local.remove(['pending_crop', 'active_category']);
+        setPendingCropImage(null);
+        setView('create');
+    };
+
+    const cancelCrop = () => {
+        chrome.storage?.local.remove(['pending_crop', 'active_category']);
+        setPendingCropImage(null);
+        setView('create');
+    };
+
+    // ── License gates ────────────────────────────────────────
+    if (!licensedOnce && !isDevPreview) {
+        if (licenseInfo.loading) {
+            return (
+                <div className="flex h-screen items-center justify-center bg-background">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+            );
+        }
+        if (!licenseInfo.valid) {
+            return <LicenseView onSuccess={() => setLicensedOnce(true)} />;
+        }
     }
-  };
 
-
-
-  if (view === 'generating') {
-    return <GenerationTraceView
-      steps={traceSteps}
-      generatedImages={generatedImages}
-      onClose={() => setView('home')}
-      isGenerating={loading}
-      onRefine={refineArtifact}
-    />;
-  }
-
-  if (view === 'generated' && generatedImages.length > 0) {
-    return <GeneratedImageView
-      imageUrl={generatedImages[generatedImages.length - 1]}
-      designSpec={designRecipe}
-      onClose={() => setView('home')}
-      onRegenerate={() => {
-        setView('home');
-        setTimeout(() => generateArtifact(), 100);
-      }}
-      onRefine={refineArtifact}
-    />;
-  }
-
-  return (
-    <div className="flex flex-col h-screen bg-background font-sans text-foreground">
-      {/* Header */}
-      <div className="flex justify-between items-center px-4 py-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <div className="bg-primary/10 p-1 rounded-md">
-            <Wand2 className="w-4 h-4 text-primary" />
-          </div>
-          <h1 className="text-sm font-semibold tracking-tight">Huenxt Design</h1>
-        </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setView('settings')}>
-          <Settings className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <ScrollArea className="flex-1 bg-muted/5">
-        <div className="px-4 py-6 space-y-8">
-
-          <StrategySection strategy={strategy} onUpdate={updateStrategy} />
-
-          <Separator />
-
-          <InspirationSection
-            images={images}
-            onSelectCategory={startSelection}
-            onDeleteImage={deleteImage}
-            onClearAll={clearAllImages}
-            onUpload={handleImageUpload}
-          />
-
-          <Separator />
-
-          {/* Additional Request - Left in App.tsx as it's simple, or could be extracted too. Let's keep it here for now as it's part of context but generic */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2 px-1">
-              <Badge variant="outline" className="bg-background text-primary border-primary/20">Step 3</Badge>
-              <h2 className="text-sm font-semibold tracking-tight">Specifics</h2>
-            </div>
-            <Textarea
-              className="resize-none min-h-[80px] text-sm bg-card"
-              placeholder="Any specific text, tagline preference, or additional requirements..."
-              value={strategy.additionalReq}
-              onChange={(e) => updateStrategy('additionalReq', e.target.value)}
+    // ── Standalone views ─────────────────────────────────────
+    if (view === 'settings') {
+        return (
+            <SettingsView
+                config={config}
+                onConfigChange={setConfig}
+                onSave={() => setView('create')}
+                onBack={() => setView('create')}
+                licenseInfo={licenseInfo}
+                onActivateRequest={() => setView('activate')}
             />
-          </section>
+        );
+    }
 
-          <Separator />
+    if (view === 'activate') {
+        return (
+            <LicenseView
+                onSuccess={() => {
+                    setLicensedOnce(true);
+                    setView('create');
+                }}
+            />
+        );
+    }
 
-          <ImagenConfigSection
-            config={imagenConfig}
-            onChange={setImagenConfig}
-            platform={strategy.platform}
-          />
+    if (view === 'crop' && pendingCropImage) {
+        return (
+            <CropView
+                imageSrc={pendingCropImage}
+                category={null}
+                onConfirm={onConfirmCrop}
+                onCancel={cancelCrop}
+            />
+        );
+    }
 
-          <div className="h-12" />
+    // ── Main shell ───────────────────────────────────────────
+    return (
+        <div className="flex h-screen flex-col overflow-hidden bg-background">
+            <Header onSettings={() => setView('settings')} />
 
+            {/* Content */}
+            <main className="flex-1 overflow-y-auto scrollbar-thin">
+                    {view === 'create' && (
+                        <CreateView
+                            brief={brief}
+                            brand={brand}
+                            onBrandClick={() => setBrandDialogOpen(true)}
+                            onBriefChange={updateBrief}
+                            onGenerate={handleGenerate}
+                            onSmartPrompt={handleSmartPrompt}
+                            onPickFromPage={startPickFromPage}
+                        />
+                    )}
+
+                    {view === 'generating' && (
+                        <GeneratingView
+                            apiDone={apiDone}
+                            error={generationError}
+                            onComplete={() => setView('result')}
+                            onCancel={() => {
+                                cancelledRef.current = true;
+                                setGenerationError(null);
+                                setView('create');
+                            }}
+                        />
+                    )}
+
+                    {view === 'result' && currentGeneration && (
+                        <ResultView
+                            generation={currentGeneration}
+                            history={history}
+                            activeAssetId={activeAssetId}
+                            onSelectAsset={setActiveAssetId}
+                            onOpenGeneration={handleOpenGeneration}
+                            onEditBrief={() => setView('create')}
+                            onDownload={handleDownload}
+                            onRemake={handleRemake}
+                            onDuplicateBrief={handleDuplicateBrief}
+                            onDeleteGeneration={handleDeleteGeneration}
+                            onNewVariant={handleNewVariant}
+                            onRefine={handleRefine}
+                            onFeedback={handleFeedback}
+                            working={working}
+                            workingLabel={workingLabel}
+                        />
+                    )}
+            </main>
+
+            <BrandDialog
+                open={brandDialogOpen}
+                onOpenChange={setBrandDialogOpen}
+                brand={brand}
+                onSave={setBrand}
+            />
         </div>
-      </ScrollArea>
-
-      <div className="p-4 border-t border-border bg-background">
-        <Button
-          className="w-full rounded-full shadow-lg h-11 text-base font-medium"
-          onClick={generateArtifact}
-          disabled={loading}
-        >
-          {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
-          {loading ? 'Designing...' : 'Generate Design Recipe'}
-        </Button>
-      </div>
-    </div>
-  );
+    );
 }

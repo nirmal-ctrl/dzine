@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Huenxt",
+  "name": "Somae — AI Marketing Creative Assistant",
   "version": "1.0.0",
-  "description": "Select images and generate artifacts",
+  "description": "Turn your marketing brief into polished, on-brand creatives. AI marketing content, 10x faster.",
   "permissions": [
     "activeTab",
     "scripting",
@@ -18,11 +18,17 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Open Huenxt"
+    "default_title": "Open Somae"
   },
   "side_panel": {
     "default_path": "index.html"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["avatar.png", "logo.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"
   },

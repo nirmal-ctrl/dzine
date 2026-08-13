@@ -6,6 +6,9 @@ export default withAuth({
   },
 });
 
+// NOTE: Only /admin is auth-gated so the dashboard UI can be previewed
+// without Google OAuth credentials. Re-add "/dashboard/:path*",
+// "/pricing/:path*" and "/success/:path*" for production.
 export const config = {
-  matcher: ["/dashboard/:path*", "/pricing/:path*", "/success/:path*", "/admin/:path*"],
+  matcher: ["/admin/:path*"],
 };
