@@ -1,29 +1,14 @@
 import type { SVGProps } from 'react';
 import { AVATAR_SMALL } from '@/lib/avatars';
 import { scrollToId } from '@/lib/scroll';
-import { navigate } from '@/lib/router';
 
 const LINKS = [
   { label: 'Product', href: '#demo' },
   { label: 'How it works', href: '#how-it-works' },
   { label: 'About', href: '#why' },
   { label: 'Contact', href: '#beta' },
-  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Privacy', href: '#beta' },
 ];
-
-/** Section anchors scroll in place on the homepage; from other pages we go home first. */
-function handleFooterLink(href: string) {
-  if (href.startsWith('/')) {
-    navigate(href);
-    return;
-  }
-  if (window.location.pathname !== '/') {
-    navigate('/', { scrollTo: href });
-  } else {
-    scrollToId(href);
-  }
-}
-
 
 /* Minimal brand glyphs (lucide no longer ships brand icons). */
 const InstagramIcon = (p: SVGProps<SVGSVGElement>) => (
@@ -86,9 +71,8 @@ export function Footer() {
             {LINKS.map((l) => (
               <button
                 key={l.label}
-                onClick={() => handleFooterLink(l.href)}
+                onClick={() => scrollToId(l.href)}
                 className="text-[13.5px] font-medium text-white/60 transition-colors hover:text-white"
-
               >
                 {l.label}
               </button>

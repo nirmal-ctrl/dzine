@@ -217,6 +217,8 @@ export default function LandingPage() {
             <Link href="/#product" className="transition-colors hover:text-[#2b5ce6]">Product</Link>
             <Link href="/pricing" className="transition-colors hover:text-[#2b5ce6]">Pricing</Link>
             <Link href="/auth/signin" className="transition-colors hover:text-[#2b5ce6]">Login</Link>
+            <Link href="/privacy" className="transition-colors hover:text-[#2b5ce6]">Privacy Policy</Link>
+
           </div>
           <p className="text-[12px] font-medium text-[#8fa1c7]">
             © 2026 Somae. Your brand, understood.
