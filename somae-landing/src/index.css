@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Somae brand ─────────────────────────────────────── */
+  --color-somae-blue: #08c2ff;
+  --color-somae-deep: #0099d6;
+  --color-somae-ink: #0c0c0c;
+  --color-somae-mist: #f3f9ff;
+  --color-somae-sky: #c4ecff;
+  --color-somae-lav: #edf3ff;
+
+  --font-display: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-hand: "Caveat", "Segoe Script", cursive;
+
+  --shadow-soft: 0 24px 70px -28px rgb(12 12 12 / 0.16);
+  --shadow-lift: 0 36px 90px -30px rgb(12 12 12 / 0.22);
+  --shadow-glow: 0 30px 90px -20px rgb(8 194 255 / 0.45);
+  --shadow-chip: 0 10px 30px -12px rgb(12 12 12 / 0.14);
+
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-breathe: breathe 5.2s ease-in-out infinite;
+  --animate-tilt: tilt 9s ease-in-out infinite;
+  --animate-drift-a: drift-a 34s ease-in-out infinite alternate;
+  --animate-drift-b: drift-b 44s ease-in-out infinite alternate;
+  --animate-scroll-cue: scroll-cue 2.4s ease-in-out infinite;
+  --animate-spin-slower: spin 16s linear infinite;
+  --animate-pulse-dot: pulse-dot 1.4s ease-in-out infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.014); }
+  }
+  @keyframes tilt {
+    0%, 100% { transform: rotate(-1.4deg); }
+    50% { transform: rotate(1.4deg); }
+  }
+  @keyframes drift-a {
+    0% { transform: translate3d(-6%, -4%, 0) scale(1); }
+    100% { transform: translate3d(7%, 6%, 0) scale(1.15); }
+  }
+  @keyframes drift-b {
+    0% { transform: translate3d(5%, 7%, 0) scale(1.1); }
+    100% { transform: translate3d(-7%, -5%, 0) scale(0.95); }
+  }
+  @keyframes scroll-cue {
+    0% { transform: translateY(0); opacity: 1; }
+    70% { transform: translateY(14px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 0; }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.35); opacity: 0.5; }
+  }
+}
+
+/* ── Base ─────────────────────────────────────────────── */
+html {
+  scroll-behavior: auto;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+body {
+  @apply bg-white font-sans text-somae-ink antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+::selection {
+  background: rgb(8 194 255 / 0.28);
+  color: #0c0c0c;
+}
+
+img {
+  -webkit-user-drag: none;
+}
+
+/* ── Utilities ────────────────────────────────────────── */
+.text-gradient-blue {
+  background: linear-gradient(100deg, #0c0c0c 5%, #08c2ff 62%, #0099d6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-blue-soft {
+  background: linear-gradient(100deg, #08c2ff 10%, #0099d6 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glass {
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+.glass-dark {
+  background: rgb(12 12 12 / 0.55);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+
+.poster-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
